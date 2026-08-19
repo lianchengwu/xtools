@@ -1,0 +1,12 @@
+[workspace]
+resolver = "3"
+members = ["crates/xtools-ui", "crates/xtools-host"]
+default-members = ["crates/xtools-host"]
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+
+[workspace.dependencies]
+xtools-ui = { path = "crates/xtools-ui" }
