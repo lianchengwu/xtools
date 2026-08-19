@@ -82,27 +82,27 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| HOST-01 | — | Pending |
-| HOST-02 | — | Pending |
-| HOST-03 | — | Pending |
-| LAUNCH-01 | — | Pending |
-| LAUNCH-02 | — | Pending |
-| LAUNCH-03 | — | Pending |
-| TIME-01 | — | Pending |
-| TIME-02 | — | Pending |
-| JSON-01 | — | Pending |
-| JSON-02 | — | Pending |
-| JSON-03 | — | Pending |
-| TRANS-01 | — | Pending |
-| TRANS-02 | — | Pending |
-| UI-01 | — | Pending |
-| UI-02 | — | Pending |
+| HOST-01 | Phase 1 | Pending |
+| HOST-02 | Phase 1 | Pending |
+| HOST-03 | Phase 1 | Pending |
+| LAUNCH-01 | Phase 2 | Pending |
+| LAUNCH-02 | Phase 2 | Pending |
+| LAUNCH-03 | Phase 1 | Pending |
+| TIME-01 | Phase 2 | Pending |
+| TIME-02 | Phase 2 | Pending |
+| JSON-01 | Phase 3 | Pending |
+| JSON-02 | Phase 3 | Pending |
+| JSON-03 | Phase 3 | Pending |
+| TRANS-01 | Phase 3 | Pending |
+| TRANS-02 | Phase 3 | Pending |
+| UI-01 | Phase 1 | Pending |
+| UI-02 | Phase 2 | Pending |
 
 **Coverage:**
 - v1 requirements: 15 total
-- Mapped to phases: 0
-- Unmapped: 15
+- Mapped to phases: 15
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-08-19*
-*Last updated: 2026-08-19 after initial definition*
+*Last updated: 2026-08-19 after roadmap mapping*
