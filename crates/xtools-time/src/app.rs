@@ -4,7 +4,6 @@ use std::time::Duration;
 use eframe::egui::{self, CentralPanel, Context, Frame, ViewportCommand};
 use xtools_ui::chrome::{
     apply_theme, copy_button_enabled, field_with_action, inline_error, now_button, tool_shell,
-    value_field,
 };
 use xtools_ui::{TIME_INSTANCE, accept_raise, raise_instance};
 
@@ -205,21 +204,14 @@ impl eframe::App for TimeApp {
 
                 ui.add_space(14.0);
 
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new("本地时间")
-                            .small()
-                            .color(egui::Color32::from_rgb(0x8F, 0x8F, 0x94)),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        if now_button(ui).clicked() {
-                            let (s, ms, local) = convert::from_now();
-                            self.apply_triple(s, ms, local);
-                        }
-                    });
+                let mut now_clicked = false;
+                let r = field_with_action(ui, "本地时间", &mut self.local, |ui| {
+                    now_clicked = now_button(ui).clicked();
                 });
-                ui.add_space(4.0);
-                let r = value_field(ui, &mut self.local);
+                if now_clicked {
+                    let (s, ms, local) = convert::from_now();
+                    self.apply_triple(s, ms, local);
+                }
                 if r.changed() {
                     self.on_local();
                 }
@@ -233,7 +225,7 @@ impl eframe::App for TimeApp {
     }
 
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        [0.0, 0.0, 0.0, 0.0]
+        [0.12, 0.12, 0.14, 1.0]
     }
 
     fn persist_egui_memory(&self) -> bool {

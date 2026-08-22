@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use egui::{
-    Align2, Color32, Context, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Frame,
-    Margin, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2,
+    Align2, Button, Color32, Context, CornerRadius, FontData, FontDefinitions, FontFamily, FontId,
+    Frame, Key, Margin, Pos2, Response, RichText, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2,
     ViewportCommand, Visuals,
 };
 
@@ -141,69 +141,53 @@ pub fn tool_shell(ui: &mut Ui, title: &str, add_contents: impl FnOnce(&mut Ui)) 
 }
 
 fn title_bar(ui: &mut Ui, title: &str) {
+    if ui.input(|i| i.key_pressed(Key::Escape)) {
+        ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+        std::process::exit(0);
+    }
     let height = 40.0;
-    let (bar, response) =
-        ui.allocate_exact_size(Vec2::new(ui.available_width(), height), Sense::drag());
+    let close_w = 40.0;
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing = Vec2::ZERO;
+        ui.allocate_ui_with_layout(
+            Vec2::new(ui.available_width(), height),
+            egui::Layout::right_to_left(egui::Align::Center),
+            |ui| {
+                let close = ui.add_sized(
+                    Vec2::new(close_w, height),
+                    Button::new(RichText::new("×").size(20.0).color(muted()))
+                        .fill(Color32::TRANSPARENT)
+                        .stroke(Stroke::NONE),
+                );
+                if close.clicked() {
+                    ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+                    std::process::exit(0);
+                }
+
+                let (drag, drag_resp) = ui.allocate_exact_size(ui.available_size(), Sense::drag());
+                ui.painter().text(
+                    Pos2::new(drag.left() + 20.0, drag.center().y),
+                    Align2::LEFT_CENTER,
+                    title,
+                    FontId::proportional(18.0),
+                    c32(ORB_MARK),
+                );
+                if drag_resp.drag_started() {
+                    ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
+                }
+            },
+        );
+    });
+    let bottom = ui.min_rect().bottom();
+    let left = ui.max_rect().left();
+    let right = ui.max_rect().right();
     ui.painter().line_segment(
         [
-            Pos2::new(bar.left() + 12.0, bar.bottom()),
-            Pos2::new(bar.right() - 12.0, bar.bottom()),
+            Pos2::new(left + 12.0, bottom),
+            Pos2::new(right - 12.0, bottom),
         ],
         Stroke::new(1.0, hairline()),
     );
-    ui.painter().text(
-        Pos2::new(bar.left() + 20.0, bar.center().y),
-        Align2::LEFT_CENTER,
-        title,
-        FontId::proportional(18.0),
-        c32(ORB_MARK),
-    );
-
-    let close = Rect::from_center_size(
-        Pos2::new(bar.right() - 22.0, bar.center().y),
-        Vec2::splat(22.0),
-    );
-    let close_resp = ui.interact(close, ui.id().with("close"), Sense::click());
-    let close_fill = if close_resp.hovered() {
-        Color32::from_rgb(0x3A, 0x3A, 0x40)
-    } else {
-        Color32::TRANSPARENT
-    };
-    ui.painter()
-        .rect_filled(close, CornerRadius::same(6), close_fill);
-    let x_stroke = Stroke::new(
-        1.4,
-        if close_resp.hovered() {
-            c32(ORB_MARK)
-        } else {
-            muted()
-        },
-    );
-    let pad = 6.5;
-    ui.painter().line_segment(
-        [
-            Pos2::new(close.left() + pad, close.top() + pad),
-            Pos2::new(close.right() - pad, close.bottom() - pad),
-        ],
-        x_stroke,
-    );
-    ui.painter().line_segment(
-        [
-            Pos2::new(close.right() - pad, close.top() + pad),
-            Pos2::new(close.left() + pad, close.bottom() - pad),
-        ],
-        x_stroke,
-    );
-    if close_resp.clicked() {
-        ui.ctx().send_viewport_cmd(ViewportCommand::Close);
-    }
-
-    if !close_resp.hovered()
-        && response.is_pointer_button_down_on()
-        && ui.input(|i| i.pointer.primary_pressed())
-    {
-        ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
-    }
 }
 
 pub fn labeled_field(ui: &mut Ui, caption: &str, text: &mut String) -> Response {

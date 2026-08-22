@@ -43,7 +43,7 @@ fn main() -> eframe::Result {
                 .with_inner_size([440.0, 400.0])
                 .with_min_inner_size([400.0, 340.0])
                 .with_decorations(false)
-                .with_transparent(true)
+                .with_transparent(false)
                 .with_app_id("dev.xtools.timestamp")
                 .with_window_type(X11WindowType::Utility);
             let options = eframe::NativeOptions {
