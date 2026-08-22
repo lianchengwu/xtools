@@ -67,6 +67,8 @@ Recent decisions affecting current work:
 - Phase 1: Menu is three hardcoded entries; no plugin scan, no search box.
 - Phase 2: Timestamp is the chrome template; spawn-or-focus before cloning tools.
 - Phase 3: TranslateEngine trait + one engine; no API keys in the repo.
+- Timestamp tool is frameless (user override of D-14). Phase 3 clones this shell.
+- Timestamp prefers X11 so Utility + skip-taskbar apply on this Wayland/KWin session.
 
 ### Pending Todos
 
@@ -76,6 +78,12 @@ None yet.
 
 - Phase 1: Live-verify Overlay + shaped input region on this KWin session.
 - Phase 2: Cross-toolkit xdg-activation (GTK host → eframe child) is the uncertain seam.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 260822-uts | Fix timestamp window: CJK tofu fonts, borderless chrome, hide from taskbar | 2026-08-22 | 0b53e23 | [260822-uts-fix-timestamp-window-cjk-tofu-fonts-bord](./quick/260822-uts-fix-timestamp-window-cjk-tofu-fonts-bord/) |
 
 ## Deferred Items
 
@@ -87,6 +95,6 @@ Items acknowledged and carried forward from previous milestone close:
 
 ## Session Continuity
 
-Last session: 2026-08-22T13:07:06.569Z
-Stopped at: Phase 2 context gathered
+Last session: 2026-08-22T14:20:00Z
+Last activity: 2026-08-22 - Completed quick task 260822-uts: Fix timestamp window: CJK tofu fonts, borderless chrome, hide from taskbar
 Resume file: .planning/phases/02-timestamp-window-and-spawn-or-focus/02-CONTEXT.md
