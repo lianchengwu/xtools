@@ -20,20 +20,39 @@ impl Rect {
     }
 }
 
+/// Widget-local output. Layer-shell surface origin is (0,0), not monitor.x/y.
+pub fn surface_rect(w: f64, h: f64) -> Rect {
+    Rect {
+        x: 0.0,
+        y: 0.0,
+        w: w.max(1.0),
+        h: h.max(1.0),
+    }
+}
+
+/// Unscaled 4K (and similar) makes a 40px disk vanish. Scale paint/hit only.
+pub fn vis_scale(surface: Rect) -> f64 {
+    if surface.w >= 2560.0 || surface.h >= 1600.0 {
+        2.0
+    } else {
+        1.0
+    }
+}
+
 /// D-16: mid-right, vertically centered, full disk on-screen.
-pub fn default_main_center(monitor: Rect, main_r: f64) -> (f64, f64) {
+pub fn default_main_center(surface: Rect, main_r: f64) -> (f64, f64) {
     let inset = main_r.max(8.0);
-    let cx = monitor.x + monitor.w - inset;
-    let cy = monitor.y + monitor.h / 2.0;
-    clamp_main(cx, cy, main_r, monitor)
+    let cx = surface.w - inset;
+    let cy = surface.h / 2.0;
+    clamp_main(cx, cy, main_r, surface)
 }
 
 /// D-17: entire main disk stays inside the output.
-pub fn clamp_main(cx: f64, cy: f64, main_r: f64, monitor: Rect) -> (f64, f64) {
-    let min_x = monitor.x + main_r;
-    let max_x = monitor.x + monitor.w - main_r;
-    let min_y = monitor.y + main_r;
-    let max_y = monitor.y + monitor.h - main_r;
+pub fn clamp_main(cx: f64, cy: f64, main_r: f64, surface: Rect) -> (f64, f64) {
+    let min_x = surface.x + main_r;
+    let max_x = surface.x + surface.w - main_r;
+    let min_y = surface.y + main_r;
+    let max_y = surface.y + surface.h - main_r;
     (
         cx.clamp(min_x.min(max_x), max_x.max(min_x)),
         cy.clamp(min_y.min(max_y), max_y.max(min_y)),
@@ -59,10 +78,10 @@ fn disk_inside(c: (f64, f64), r: f64, mon: Rect) -> bool {
 }
 
 /// Fan-above seats for `ToolId::ALL`. Rotate/shrink so every function disk stays on the output.
-pub fn fan_seats(main: (f64, f64), monitor: Rect) -> [(ToolId, f64, f64); 3] {
-    let fr = func_radius();
-    let min_r = main_radius() + fr + GAP;
-    let mut radius = orbit_radius();
+pub fn fan_seats(main: (f64, f64), monitor: Rect, scale: f64) -> [(ToolId, f64, f64); 3] {
+    let fr = func_radius() * scale;
+    let min_r = (main_radius() + func_radius() + GAP) * scale;
+    let mut radius = orbit_radius() * scale;
     let mut offset = 0.0_f64;
 
     let seats_for = |off: f64, rad: f64| {

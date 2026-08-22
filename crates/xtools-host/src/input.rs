@@ -40,14 +40,13 @@ pub fn refuse_if_no_input_shapes(display: &gdk::Display) -> bool {
     }
 }
 
-pub fn apply_collapsed_from_widget(widget: &impl IsA<gtk4::Widget>, cx: f64, cy: f64) {
+pub fn apply_collapsed_from_widget(widget: &impl IsA<gtk4::Widget>, cx: f64, cy: f64, radius: f64) {
     if let Some(native) = widget.native() {
         if let Some(surface) = native.surface() {
-            apply_collapsed_region(&surface, cx, cy, main_radius());
+            apply_collapsed_region(&surface, cx, cy, radius);
         }
     }
 }
-
 pub fn apply_expanded_from_widget(widget: &impl IsA<gtk4::Widget>) {
     if let Some(native) = widget.native() {
         if let Some(surface) = native.surface() {

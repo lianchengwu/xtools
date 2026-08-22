@@ -12,52 +12,62 @@ fn mark_color(cr: &cairo::Context) {
     cr.set_source_rgba(ORB_MARK.r, ORB_MARK.g, ORB_MARK.b, ORB_MARK.a);
 }
 
-fn draw_clock(cr: &cairo::Context, cx: f64, cy: f64) {
+fn draw_clock(cr: &cairo::Context, cx: f64, cy: f64, fr: f64) {
     mark_color(cr);
-    cr.set_line_width(1.6);
+    cr.set_line_width((1.6 * fr / func_radius()).max(1.0));
     cr.new_sub_path();
-    cr.arc(cx, cy, func_radius() * 0.38, 0.0, std::f64::consts::TAU);
+    cr.arc(cx, cy, fr * 0.38, 0.0, std::f64::consts::TAU);
     cr.stroke().ok();
-    cr.set_line_width(1.4);
+    cr.set_line_width((1.4 * fr / func_radius()).max(1.0));
     cr.move_to(cx, cy);
-    cr.line_to(cx, cy - func_radius() * 0.22);
+    cr.line_to(cx, cy - fr * 0.22);
     cr.stroke().ok();
     cr.move_to(cx, cy);
-    cr.line_to(cx + func_radius() * 0.16, cy + func_radius() * 0.04);
+    cr.line_to(cx + fr * 0.16, cy + fr * 0.04);
     cr.stroke().ok();
 }
 
-fn draw_text_mark(cr: &cairo::Context, cx: f64, cy: f64, text: &str) {
+fn draw_text_mark(cr: &cairo::Context, cx: f64, cy: f64, text: &str, scale: f64) {
     cr.select_font_face("sans-serif", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
-    cr.set_font_size(MARK_PX);
+    cr.set_font_size(MARK_PX * scale);
     let ext = cr
         .text_extents(text)
         .unwrap_or_else(|_| cairo::TextExtents::new(0.0, 0.0, 0.0, 0.0, 0.0, 0.0));
     mark_color(cr);
-    cr.move_to(cx - ext.width() / 2.0 - ext.x_bearing(), cy - ext.height() / 2.0 - ext.y_bearing());
+    cr.move_to(
+        cx - ext.width() / 2.0 - ext.x_bearing(),
+        cy - ext.height() / 2.0 - ext.y_bearing(),
+    );
     cr.show_text(text).ok();
 }
 
-pub fn draw_main(cr: &cairo::Context, cx: f64, cy: f64) {
+pub fn draw_main(cr: &cairo::Context, cx: f64, cy: f64, scale: f64) {
     let _ = theme::MAIN_D;
-    fill_disk(cr, cx, cy, main_radius());
-    draw_text_mark(cr, cx, cy, "x");
+    let r = main_radius() * scale;
+    fill_disk(cr, cx, cy, r);
+    cr.set_source_rgba(ORB_MARK.r, ORB_MARK.g, ORB_MARK.b, 0.55);
+    cr.set_line_width((1.5 * scale).max(1.0));
+    cr.new_sub_path();
+    cr.arc(cx, cy, r - 1.0, 0.0, std::f64::consts::TAU);
+    cr.stroke().ok();
+    draw_text_mark(cr, cx, cy, "x", scale);
 }
 
-pub fn draw_func(cr: &cairo::Context, id: ToolId, cx: f64, cy: f64, t: f64) {
+pub fn draw_func(cr: &cairo::Context, id: ToolId, cx: f64, cy: f64, t: f64, scale: f64) {
     if t <= 0.0 {
         return;
     }
+    let fr = func_radius() * scale;
     cr.save().ok();
     cr.set_source_rgba(ORB_FILL.r, ORB_FILL.g, ORB_FILL.b, t.clamp(0.0, 1.0));
     cr.new_sub_path();
-    cr.arc(cx, cy, func_radius(), 0.0, std::f64::consts::TAU);
+    cr.arc(cx, cy, fr, 0.0, std::f64::consts::TAU);
     cr.fill().ok();
     cr.set_source_rgba(ORB_MARK.r, ORB_MARK.g, ORB_MARK.b, t.clamp(0.0, 1.0));
     match id {
-        ToolId::Time => draw_clock(cr, cx, cy),
-        ToolId::Json => draw_text_mark(cr, cx, cy, "{}"),
-        ToolId::Trans => draw_text_mark(cr, cx, cy, "文"),
+        ToolId::Time => draw_clock(cr, cx, cy, fr),
+        ToolId::Json => draw_text_mark(cr, cx, cy, "{}", scale),
+        ToolId::Trans => draw_text_mark(cr, cx, cy, "文", scale),
     }
     cr.restore().ok();
 }

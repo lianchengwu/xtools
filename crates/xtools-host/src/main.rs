@@ -14,7 +14,9 @@ use gtk4::{Application, ApplicationWindow, CssProvider, DrawingArea, GestureDrag
 
 use xtools_ui::{claim_instance, func_radius, main_radius, ToolId, HOST_INSTANCE, SLOP};
 
-use crate::layout::{clamp_main, default_main_center, fan_seats, hit_disk, Rect};
+use crate::layout::{
+    clamp_main, default_main_center, fan_seats, hit_disk, surface_rect, vis_scale, Rect,
+};
 
 #[derive(Clone, Copy, Debug)]
 enum Menu {
@@ -50,21 +52,39 @@ struct Host {
     last_pointer_event: Option<gtk4::gdk::Event>,
     ticking: bool,
     last_t: f64,
+    seated: bool,
     _instance: std::os::unix::net::UnixListener,
 }
 
 impl Host {
+    fn vis(&self) -> f64 {
+        vis_scale(self.monitor)
+    }
+
+    fn main_r(&self) -> f64 {
+        main_radius() * self.vis()
+    }
+
+    fn func_r(&self) -> f64 {
+        func_radius() * self.vis()
+    }
+
+    fn slop(&self) -> f64 {
+        SLOP * self.vis()
+    }
+
     fn seats(&self) -> [(ToolId, f64, f64); 3] {
-        fan_seats(self.main, self.monitor)
+        fan_seats(self.main, self.monitor, self.vis())
     }
 
     fn func_at(&self, px: f64, py: f64) -> Option<ToolId> {
         if matches!(self.menu, Menu::Collapsed) {
             return None;
         }
+        let fr = self.func_r();
         self.seats()
             .into_iter()
-            .find(|(_, x, y)| hit_disk(px, py, *x, *y, func_radius()))
+            .find(|(_, x, y)| hit_disk(px, py, *x, *y, fr))
             .map(|(id, _, _)| id)
     }
 }
@@ -81,30 +101,60 @@ fn load_css() {
     }
 }
 
-fn monitor_rect(widget: &impl IsA<gtk4::Widget>) -> Rect {
-    if let Some(native) = widget.native() {
-        if let Some(surface) = native.surface() {
-            if let Some(monitor) = widget.display().monitor_at_surface(&surface) {
-                return Rect::from_monitor(&monitor.geometry());
-            }
-            if let Some(obj) = widget.display().monitors().item(0) {
-                if let Ok(monitor) = obj.downcast::<gtk4::gdk::Monitor>() {
-                    return Rect::from_monitor(&monitor.geometry());
+fn primary_output_size() -> (i32, i32) {
+    let Some(display) = gtk4::gdk::Display::default() else {
+        return (1920, 1080);
+    };
+    let monitors = display.monitors();
+    let mut best = (1920, 1080);
+    let mut area = best.0 * best.1;
+    for i in 0..monitors.n_items() {
+        if let Some(obj) = monitors.item(i) {
+            if let Ok(mon) = obj.downcast::<gtk4::gdk::Monitor>() {
+                let g = mon.geometry();
+                let a = g.width() * g.height();
+                if a > area {
+                    best = (g.width(), g.height());
+                    area = a;
                 }
             }
         }
     }
-    Rect {
-        x: 0.0,
-        y: 0.0,
-        w: 1920.0,
-        h: 1080.0,
+    eprintln!("xtools-host: monitor size {}x{}", best.0, best.1);
+    best
+}
+
+fn seat_surface(area: &DrawingArea, host: &mut Host) {
+    let w = f64::from(area.width());
+    let h = f64::from(area.height());
+    if w < 2.0 || h < 2.0 {
+        return;
+    }
+    let rect = surface_rect(w, h);
+    host.monitor = rect;
+    if !host.seated {
+        let r = host.main_r();
+        host.main = (w / 2.0, h - r - 12.0);
+        host.origin_main = host.main;
+        host.seated = true;
+        eprintln!(
+            "xtools-host: surface {:.0}x{:.0} vis={} main=({:.0},{:.0})",
+            w,
+            h,
+            host.vis(),
+            host.main.0,
+            host.main.1
+        );
+    } else {
+        host.main = clamp_main(host.main.0, host.main.1, host.main_r(), rect);
     }
 }
 
 fn sync_region(area: &DrawingArea, host: &Host) {
     match host.menu {
-        Menu::Collapsed => input::apply_collapsed_from_widget(area, host.main.0, host.main.1),
+        Menu::Collapsed => {
+            input::apply_collapsed_from_widget(area, host.main.0, host.main.1, host.main_r())
+        }
         _ => input::apply_expanded_from_widget(area),
     }
 }
@@ -177,13 +227,19 @@ fn snap_collapse(area: &DrawingArea, state: &Rc<RefCell<Host>>) {
     area.queue_draw();
 }
 
-fn handle_click(area: &DrawingArea, state: &Rc<RefCell<Host>>, x: f64, y: f64, event: Option<gtk4::gdk::Event>) {
+fn handle_click(
+    area: &DrawingArea,
+    state: &Rc<RefCell<Host>>,
+    x: f64,
+    y: f64,
+    event: Option<gtk4::gdk::Event>,
+) {
     let (on_main, on_func, openish) = {
         let mut host = state.borrow_mut();
         if let Some(ev) = event {
             host.last_pointer_event = Some(ev);
         }
-        let on_main = hit_disk(x, y, host.main.0, host.main.1, main_radius());
+        let on_main = hit_disk(x, y, host.main.0, host.main.1, host.main_r());
         let on_func = host.func_at(x, y);
         (on_main, on_func, host.menu.is_openish())
     };
@@ -218,9 +274,12 @@ fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
         .application(app)
         .decorated(false)
         .resizable(false)
+        .default_width(256)
+        .default_height(256)
         .build();
 
     overlay::attach_overlay(&window);
+    window.set_default_size(256, 256);
 
     let area = DrawingArea::new();
     area.set_hexpand(true);
@@ -241,6 +300,7 @@ fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
         last_pointer_event: None,
         ticking: false,
         last_t: 0.0,
+        seated: false,
         _instance: instance,
     }));
 
@@ -253,14 +313,15 @@ fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
             cr.paint().ok();
             cr.set_operator(gtk4::cairo::Operator::Over);
             let t = host.last_t;
+            let vis = host.vis();
             if t > 0.0 {
                 for (id, x, y) in host.seats() {
                     let px = anim::lerp(host.main.0, x, t);
                     let py = anim::lerp(host.main.1, y, t);
-                    paint::draw_func(cr, id, px, py, t);
+                    paint::draw_func(cr, id, px, py, t, vis);
                 }
             }
-            paint::draw_main(cr, host.main.0, host.main.1);
+            paint::draw_main(cr, host.main.0, host.main.1, vis);
         });
     }
 
@@ -275,15 +336,37 @@ fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
                 }
                 return;
             }
-            let mon = monitor_rect(area);
             {
                 let mut host = state.borrow_mut();
-                host.monitor = mon;
-                host.main = default_main_center(mon, main_radius());
-                host.origin_main = host.main;
+                seat_surface(area, &mut host);
             }
             let host = state.borrow();
-            input::apply_collapsed_from_widget(area, host.main.0, host.main.1);
+            if host.seated {
+                sync_region(area, &host);
+                if let Some(win) = area.root().and_downcast::<ApplicationWindow>() {
+                    let (_sw, sh) = primary_output_size();
+                    overlay::place_mid_right(&win, sh, host.main.1);
+                }
+            }
+            area.queue_draw();
+        });
+    }
+
+    {
+        let state = Rc::clone(&state);
+        area.connect_resize(move |area, _w, _h| {
+            {
+                let mut host = state.borrow_mut();
+                seat_surface(area, &mut host);
+            }
+            let host = state.borrow();
+            if host.seated {
+                sync_region(area, &host);
+                if let Some(win) = area.root().and_downcast::<ApplicationWindow>() {
+                    let (_sw, sh) = primary_output_size();
+                    overlay::place_mid_right(&win, sh, host.main.1);
+                }
+            }
             area.queue_draw();
         });
     }
@@ -302,12 +385,13 @@ fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
         let state = Rc::clone(&state);
         let area = area.clone();
         drag.connect_drag_update(move |_, dx, dy| {
+            let slop = state.borrow().slop();
             let dist = (dx * dx + dy * dy).sqrt();
             let should_snap = {
                 let host = state.borrow();
-                !host.dragging && dist > SLOP && host.menu.is_openish()
+                !host.dragging && dist > slop && host.menu.is_openish()
             };
-            if !state.borrow().dragging && dist > SLOP {
+            if !state.borrow().dragging && dist > slop {
                 if should_snap {
                     snap_collapse(&area, &state);
                 }
@@ -316,7 +400,9 @@ fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
             if state.borrow().dragging {
                 let mut host = state.borrow_mut();
                 let (cx, cy) = (host.origin_main.0 + dx, host.origin_main.1 + dy);
-                host.main = clamp_main(cx, cy, main_radius(), host.monitor);
+                let r = host.main_r();
+                let mon = host.monitor;
+                host.main = clamp_main(cx, cy, r, mon);
             }
             area.queue_draw();
         });
@@ -329,7 +415,7 @@ fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
             let dragged = state.borrow().dragging;
             if dragged {
                 let host = state.borrow();
-                input::apply_collapsed_from_widget(&area, host.main.0, host.main.1);
+                sync_region(&area, &host);
                 area.queue_draw();
                 return;
             }
