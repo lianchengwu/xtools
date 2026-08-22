@@ -1,6 +1,6 @@
+use jiff::Timestamp;
 use jiff::civil::DateTime;
 use jiff::tz::TimeZone;
-use jiff::Timestamp;
 
 /// Local display: space, no T, no Z, millisecond fraction.
 pub const LOCAL_FMT: &str = "%Y-%m-%d %H:%M:%S%.3f";

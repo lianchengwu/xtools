@@ -1,11 +1,26 @@
 //! Shared egui chrome. Compiled only with feature `egui-chrome`.
 
+use std::sync::Arc;
+
 use egui::{
-    Align2, Color32, Context, FontFamily, FontId, Response, RichText, Sense, Stroke, TextEdit, Ui,
-    Vec2, Visuals,
+    Align2, Color32, Context, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Frame,
+    Margin, Pos2, Rect, Response, RichText, Sense, Stroke, StrokeKind, TextEdit, Ui, Vec2,
+    ViewportCommand, Visuals,
 };
 
 use crate::theme::{Color, ORB_FILL, ORB_MARK};
+
+const CJK_FONT: &str = "xtools-cjk";
+
+const CJK_CANDIDATES: &[&str] = &[
+    "/usr/share/fonts/truetype/SourceHanSansCN-Regular.otf",
+    "/usr/share/fonts/truetype/SourceHanSansCN-Normal.otf",
+    "/usr/share/fonts/opentype/source-han-sans/SourceHanSansCN-Regular.otf",
+    "/usr/share/fonts/noto-cjk/NotoSansCJKsc-Regular.otf",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+    "/usr/share/fonts/truetype/droid/DroidSansFallbackFull.ttf",
+];
 
 fn c32(c: Color) -> Color32 {
     Color32::from_rgba_unmultiplied(
@@ -28,23 +43,60 @@ fn destructive() -> Color32 {
     Color32::from_rgb(0xC4, 0x5C, 0x5C)
 }
 
+fn hairline() -> Color32 {
+    Color32::from_rgb(0x3A, 0x3A, 0x40)
+}
+
+pub fn cjk_font_path() -> Option<&'static str> {
+    CJK_CANDIDATES
+        .iter()
+        .copied()
+        .find(|path| std::path::Path::new(path).is_file())
+}
+
+/// Install a system CJK face so Han in labels is not tofu.
+pub fn install_fonts(ctx: &Context) {
+    let mut fonts = FontDefinitions::default();
+    if let Some(path) = cjk_font_path()
+        && let Ok(bytes) = std::fs::read(path)
+    {
+        fonts
+            .font_data
+            .insert(CJK_FONT.to_owned(), Arc::new(FontData::from_owned(bytes)));
+        if let Some(proportional) = fonts.families.get_mut(&FontFamily::Proportional) {
+            proportional.insert(0, CJK_FONT.to_owned());
+        }
+        if let Some(mono) = fonts.families.get_mut(&FontFamily::Monospace) {
+            mono.push(CJK_FONT.to_owned());
+        }
+    }
+    ctx.set_fonts(fonts);
+}
+
 pub fn apply_theme(ctx: &Context) {
     let mut visuals = Visuals::dark();
     let ground = c32(ORB_FILL);
     let mark = c32(ORB_MARK);
-    visuals.panel_fill = ground;
+    let radius = CornerRadius::same(8);
+    visuals.panel_fill = Color32::TRANSPARENT;
     visuals.window_fill = ground;
     visuals.extreme_bg_color = secondary();
     visuals.faint_bg_color = secondary();
     visuals.override_text_color = Some(mark);
+    visuals.window_corner_radius = CornerRadius::same(12);
+    visuals.widgets.noninteractive.corner_radius = radius;
     visuals.widgets.inactive.bg_fill = secondary();
     visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, muted());
-    visuals.widgets.hovered.bg_fill = secondary();
+    visuals.widgets.inactive.corner_radius = radius;
+    visuals.widgets.hovered.bg_fill = Color32::from_rgb(0x3A, 0x3A, 0x40);
+    visuals.widgets.hovered.corner_radius = radius;
     visuals.widgets.active.bg_fill = mark;
+    visuals.widgets.active.corner_radius = radius;
     visuals.selection.stroke = Stroke::new(1.0, muted());
     ctx.set_visuals(visuals);
     ctx.style_mut_of(egui::Theme::Dark, |style| {
         style.spacing.item_spacing = Vec2::new(8.0, 8.0);
+        style.spacing.button_padding = Vec2::new(10.0, 6.0);
         style.text_styles.insert(
             egui::TextStyle::Body,
             FontId::new(16.0, FontFamily::Proportional),
@@ -55,7 +107,7 @@ pub fn apply_theme(ctx: &Context) {
         );
         style.text_styles.insert(
             egui::TextStyle::Heading,
-            FontId::new(20.0, FontFamily::Proportional),
+            FontId::new(18.0, FontFamily::Proportional),
         );
         style.text_styles.insert(
             egui::TextStyle::Monospace,
@@ -68,23 +120,133 @@ pub fn apply_theme(ctx: &Context) {
     });
 }
 
-pub fn title_strip(ui: &mut Ui, title: &str) {
-    ui.allocate_ui_with_layout(
-        Vec2::new(ui.available_width(), 32.0),
-        egui::Layout::left_to_right(egui::Align::Center),
-        |ui| {
-            ui.label(RichText::new(title).heading().strong().color(c32(ORB_MARK)));
+/// Rounded frameless card: drag title, painted close, padded body.
+pub fn tool_shell(ui: &mut Ui, title: &str, add_contents: impl FnOnce(&mut Ui)) {
+    let rect = ui.max_rect();
+    let rounding = CornerRadius::same(12);
+    ui.painter().rect_filled(rect, rounding, c32(ORB_FILL));
+    ui.painter().rect_stroke(
+        rect,
+        rounding,
+        Stroke::new(1.0, hairline()),
+        StrokeKind::Inside,
+    );
+
+    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+        title_bar(ui, title);
+        Frame::new()
+            .inner_margin(Margin::symmetric(20, 16))
+            .show(ui, add_contents);
+    });
+}
+
+fn title_bar(ui: &mut Ui, title: &str) {
+    let height = 40.0;
+    let (bar, response) =
+        ui.allocate_exact_size(Vec2::new(ui.available_width(), height), Sense::drag());
+    ui.painter().line_segment(
+        [
+            Pos2::new(bar.left() + 12.0, bar.bottom()),
+            Pos2::new(bar.right() - 12.0, bar.bottom()),
+        ],
+        Stroke::new(1.0, hairline()),
+    );
+    ui.painter().text(
+        Pos2::new(bar.left() + 20.0, bar.center().y),
+        Align2::LEFT_CENTER,
+        title,
+        FontId::proportional(18.0),
+        c32(ORB_MARK),
+    );
+
+    let close = Rect::from_center_size(
+        Pos2::new(bar.right() - 22.0, bar.center().y),
+        Vec2::splat(22.0),
+    );
+    let close_resp = ui.interact(close, ui.id().with("close"), Sense::click());
+    let close_fill = if close_resp.hovered() {
+        Color32::from_rgb(0x3A, 0x3A, 0x40)
+    } else {
+        Color32::TRANSPARENT
+    };
+    ui.painter()
+        .rect_filled(close, CornerRadius::same(6), close_fill);
+    let x_stroke = Stroke::new(
+        1.4,
+        if close_resp.hovered() {
+            c32(ORB_MARK)
+        } else {
+            muted()
         },
     );
+    let pad = 6.5;
+    ui.painter().line_segment(
+        [
+            Pos2::new(close.left() + pad, close.top() + pad),
+            Pos2::new(close.right() - pad, close.bottom() - pad),
+        ],
+        x_stroke,
+    );
+    ui.painter().line_segment(
+        [
+            Pos2::new(close.right() - pad, close.top() + pad),
+            Pos2::new(close.left() + pad, close.bottom() - pad),
+        ],
+        x_stroke,
+    );
+    if close_resp.clicked() {
+        ui.ctx().send_viewport_cmd(ViewportCommand::Close);
+    }
+
+    if !close_resp.hovered()
+        && response.is_pointer_button_down_on()
+        && ui.input(|i| i.pointer.primary_pressed())
+    {
+        ui.ctx().send_viewport_cmd(ViewportCommand::StartDrag);
+    }
 }
 
 pub fn labeled_field(ui: &mut Ui, caption: &str, text: &mut String) -> Response {
-    ui.label(RichText::new(caption).small().color(muted()));
+    if !caption.is_empty() {
+        ui.label(RichText::new(caption).small().color(muted()));
+        ui.add_space(4.0);
+    }
+    value_field(ui, text)
+}
+
+pub fn value_field(ui: &mut Ui, text: &mut String) -> Response {
+    value_field_width(ui, text, ui.available_width())
+}
+
+pub fn value_field_width(ui: &mut Ui, text: &mut String, width: f32) -> Response {
     ui.add(
         TextEdit::singleline(text)
             .font(egui::TextStyle::Monospace)
-            .desired_width(ui.available_width()),
+            .desired_width(width.max(80.0))
+            .min_size(Vec2::new(0.0, 32.0))
+            .margin(Margin::symmetric(10, 8)),
     )
+}
+
+/// Caption, then field | action on one row so the button never overlaps the well.
+pub fn field_with_action(
+    ui: &mut Ui,
+    caption: &str,
+    text: &mut String,
+    action: impl FnOnce(&mut Ui),
+) -> Response {
+    if !caption.is_empty() {
+        ui.label(RichText::new(caption).small().color(muted()));
+        ui.add_space(4.0);
+    }
+    ui.horizontal(|ui| {
+        let reserved = 76.0;
+        let r = value_field_width(ui, text, ui.available_width() - reserved);
+        ui.add_space(8.0);
+        action(ui);
+        r
+    })
+    .inner
 }
 
 pub fn copy_button(ui: &mut Ui, copied: bool) -> Response {
@@ -101,26 +263,34 @@ pub fn now_button(ui: &mut Ui) -> Response {
 }
 
 fn accent_button(ui: &mut Ui, label: &str, enabled: bool) -> Response {
-    let size = Vec2::new(64.0, 32.0);
+    let size = Vec2::new(68.0, 32.0);
+    let rounding = CornerRadius::same(8);
     if !enabled {
         let (rect, response) = ui.allocate_exact_size(size, Sense::hover());
-        ui.painter().rect_filled(rect, 4.0, secondary());
+        ui.painter().rect_filled(rect, rounding, secondary());
         ui.painter().text(
             rect.center(),
             Align2::CENTER_CENTER,
             label,
-            FontId::proportional(16.0),
+            FontId::proportional(15.0),
             muted(),
         );
         return response;
     }
     let (rect, response) = ui.allocate_exact_size(size, Sense::click());
-    ui.painter().rect_filled(rect, 4.0, c32(ORB_MARK));
+    let fill = if response.is_pointer_button_down_on() {
+        Color32::from_rgb(0xD4, 0xD6, 0xDC)
+    } else if response.hovered() {
+        Color32::from_rgb(0xF4, 0xF5, 0xF8)
+    } else {
+        c32(ORB_MARK)
+    };
+    ui.painter().rect_filled(rect, rounding, fill);
     ui.painter().text(
         rect.center(),
         Align2::CENTER_CENTER,
         label,
-        FontId::proportional(16.0),
+        FontId::proportional(15.0),
         c32(ORB_FILL),
     );
     response
@@ -128,5 +298,18 @@ fn accent_button(ui: &mut Ui, label: &str, enabled: bool) -> Response {
 
 pub fn inline_error(ui: &mut Ui, text: &str) {
     ui.add_space(4.0);
-    ui.colored_label(destructive(), RichText::new(text).size(16.0));
+    ui.colored_label(destructive(), RichText::new(text).size(13.0));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::cjk_font_path;
+
+    #[test]
+    fn finds_system_cjk_face() {
+        assert!(
+            cjk_font_path().is_some(),
+            "need a CJK otf/ttf on this machine so labels are not tofu"
+        );
+    }
 }
