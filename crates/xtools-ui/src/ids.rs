@@ -18,7 +18,26 @@ impl ToolId {
             ToolId::Trans => "文",
         }
     }
+
+    pub fn binary_name(self) -> &'static str {
+        match self {
+            ToolId::Time => "xtools-time",
+            ToolId::Json => "xtools-json",
+            ToolId::Trans => "xtools-trans",
+        }
+    }
+
+    pub fn instance_name(self) -> &'static str {
+        match self {
+            ToolId::Time => TIME_INSTANCE,
+            ToolId::Json => "xtools-json",
+            ToolId::Trans => "xtools-trans",
+        }
+    }
 }
 
 /// Abstract single-instance name for the host process (`\0` + this).
 pub const HOST_INSTANCE: &str = "xtools-host";
+
+/// Abstract single-instance name for the timestamp tool.
+pub const TIME_INSTANCE: &str = "xtools-time";

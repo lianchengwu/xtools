@@ -5,4 +5,9 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[features]
+default = []
+egui-chrome = ["dep:egui"]
+
 [dependencies]
+egui = { version = "0.36.1", optional = true }

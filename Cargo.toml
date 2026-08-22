@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/xtools-ui", "crates/xtools-host"]
+members = ["crates/xtools-ui", "crates/xtools-host", "crates/xtools-time"]
 default-members = ["crates/xtools-host"]
 
 [workspace.package]

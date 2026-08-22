@@ -5,6 +5,8 @@ mod overlay;
 mod paint;
 
 use std::cell::RefCell;
+use std::path::PathBuf;
+use std::process::Command;
 use std::rc::Rc;
 
 use gtk4::gdk::prelude::*;
@@ -12,7 +14,10 @@ use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, CssProvider, DrawingArea, GestureDrag};
 
-use xtools_ui::{claim_instance, func_radius, main_radius, ToolId, HOST_INSTANCE, SLOP};
+use xtools_ui::{
+    claim_instance, func_radius, main_radius, raise_instance, ToolId, HOST_INSTANCE, SLOP,
+    TIME_INSTANCE,
+};
 
 use crate::layout::{
     clamp_main, default_main_center, fan_seats, hit_disk, surface_rect, vis_scale, Rect,
@@ -244,7 +249,11 @@ fn handle_click(
         (on_main, on_func, host.menu.is_openish())
     };
 
-    if on_func.is_some() {
+    if let Some(id) = on_func {
+        if id == ToolId::Time {
+            let ev = state.borrow().last_pointer_event.clone();
+            launch_time(ev.as_ref());
+        }
         begin_collapse(area, state);
         return;
     }
@@ -428,6 +437,48 @@ fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
     area.add_controller(drag);
 
     window.present();
+}
+fn mint_token(event: &gtk4::gdk::Event) -> Option<String> {
+    let display = event.display()?;
+    let ctx = display.app_launch_context();
+    ctx.set_timestamp(event.time());
+    let id = gtk4::gio::prelude::AppLaunchContextExt::startup_notify_id(
+        &ctx,
+        None::<&gtk4::gio::AppInfo>,
+        &[],
+    )?;
+    let s = id.to_string();
+    if s.is_empty() {
+        None
+    } else {
+        Some(s)
+    }
+}
+
+fn sibling_bin(name: &str) -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let path = exe.parent()?.join(name);
+    path.is_file().then_some(path)
+}
+
+fn launch_time(event: Option<&gtk4::gdk::Event>) {
+    let token = event.and_then(mint_token);
+    match raise_instance(TIME_INSTANCE, token.as_deref()) {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(_) => {}
+    }
+    let Some(bin) = sibling_bin(ToolId::Time.binary_name()) else {
+        eprintln!("xtools-host: missing sibling {}", ToolId::Time.binary_name());
+        return;
+    };
+    let mut cmd = Command::new(bin);
+    if let Some(token) = token {
+        cmd.env("XDG_ACTIVATION_TOKEN", token);
+    }
+    if let Err(err) = cmd.spawn() {
+        eprintln!("xtools-host: spawn xtools-time: {err}");
+    }
 }
 
 fn main() {
