@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-release:
-    name: Build Linux Packages (RPM / DEB / Tarball)
+  build-packages:
+    name: Build Linux RPM & DEB Packages
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -50,47 +50,29 @@ jobs:
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
 
-      - name: Build DEB Package
+      - name: Package DEB
         run: |
-          cargo deb -p xtools-host --output target/generate-deb/xtools_${{ steps.get_version.outputs.VERSION }}_amd64.deb
+          mkdir -p target/dist
+          cargo deb -p xtools-host --no-build --output target/dist/xtools_${{ steps.get_version.outputs.VERSION }}_amd64.deb
 
-      - name: Build RPM Package
+      - name: Package RPM
         run: |
-          cargo generate-rpm -p crates/xtools-host -o target/generate-rpm/xtools-${{ steps.get_version.outputs.VERSION }}-1.x86_64.rpm
-
-      - name: Build Portable Tarball
-        run: |
-          PKG_DIR="xtools-${{ steps.get_version.outputs.VERSION }}-linux-x86_64"
-          mkdir -p "$PKG_DIR"
-          cp target/release/xtools-host "$PKG_DIR/"
-          cp target/release/xtools-time "$PKG_DIR/"
-          cp target/release/xtools-json "$PKG_DIR/"
-          cp target/release/xtools-trans "$PKG_DIR/"
-          cp xtools.desktop "$PKG_DIR/"
-          cp xtools.svg "$PKG_DIR/"
-          cp README.md "$PKG_DIR/"
-          cp LICENSE "$PKG_DIR/"
-          tar -czvf "target/${PKG_DIR}.tar.gz" "$PKG_DIR"
+          mkdir -p target/dist
+          cargo generate-rpm -p crates/xtools-host -o target/dist/xtools-${{ steps.get_version.outputs.VERSION }}-1.x86_64.rpm
 
       - name: Generate Checksums
         run: |
-          cd target
-          mkdir -p artifacts
-          cp generate-deb/*.deb artifacts/ 2>/dev/null || true
-          cp generate-rpm/*.rpm artifacts/ 2>/dev/null || true
-          cp *.tar.gz artifacts/ 2>/dev/null || true
-          cd artifacts
-          sha256sum * > SHA256SUMS.txt
+          cd target/dist
+          sha256sum *.deb *.rpm > SHA256SUMS.txt
           ls -la
 
-      - name: Upload Release Assets
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/artifacts/*.deb
-            target/artifacts/*.rpm
-            target/artifacts/*.tar.gz
-            target/artifacts/SHA256SUMS.txt
+            target/dist/*.deb
+            target/dist/*.rpm
+            target/dist/SHA256SUMS.txt
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
