@@ -2,28 +2,37 @@ mod app;
 mod json_ops;
 
 use xtools_ui::{
-    JSON_INSTANCE, claim_instance, prefer_x11_for_skip_taskbar, raise_instance,
-    take_activation_token,
+    JSON_INSTANCE, capture_target_desktop, claim_instance, prefer_x11_for_skip_taskbar,
+    raise_instance, take_activation_token,
 };
 
 use crate::app::JsonApp;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    capture_target_desktop();
     prefer_x11_for_skip_taskbar();
     let token = take_activation_token();
-    match claim_instance(JSON_INSTANCE) {
-        Ok(None) => {
-            let _ = raise_instance(JSON_INSTANCE, token.as_deref());
-            Ok(())
-        }
-        Ok(Some(lock)) => {
-            let app = JsonApp::new(lock)?;
-            app.run()?;
-            Ok(())
-        }
-        Err(err) => {
-            eprintln!("xtools-json: instance lock failed: {err}");
-            std::process::exit(1);
+    let mut lock = None;
+    for _ in 0..10 {
+        match claim_instance(JSON_INSTANCE) {
+            Ok(Some(l)) => {
+                lock = Some(l);
+                break;
+            }
+            Ok(None) => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(err) => {
+                eprintln!("xtools-json: instance lock failed: {err}");
+                std::process::exit(1);
+            }
         }
     }
+    let Some(lock) = lock else {
+        let _ = raise_instance(JSON_INSTANCE, token.as_deref());
+        return Ok(());
+    };
+    let app = JsonApp::new(lock)?;
+    app.run()?;
+    Ok(())
 }

@@ -80,7 +80,6 @@ impl JsonApp {
             });
         }
 
-
         // Text edited
         {
             let ui_weak = ui.as_weak();
@@ -247,7 +246,10 @@ impl JsonApp {
                                 ui.set_error_text("".into());
                             }
                             Err(err) => {
-                                ui.set_error_text(format!("无法解析为 JSON 进行树形折叠：{}", err.display()).into());
+                                ui.set_error_text(
+                                    format!("无法解析为 JSON 进行树形折叠：{}", err.display())
+                                        .into(),
+                                );
                                 ui.set_note_text("".into());
                             }
                         }

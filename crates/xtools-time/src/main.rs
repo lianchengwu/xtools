@@ -2,28 +2,37 @@ mod app;
 mod convert;
 
 use xtools_ui::{
-    TIME_INSTANCE, claim_instance, prefer_x11_for_skip_taskbar, raise_instance,
-    take_activation_token,
+    TIME_INSTANCE, capture_target_desktop, claim_instance, prefer_x11_for_skip_taskbar,
+    raise_instance, take_activation_token,
 };
 
 use crate::app::TimeApp;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    capture_target_desktop();
     prefer_x11_for_skip_taskbar();
     let token = take_activation_token();
-    match claim_instance(TIME_INSTANCE) {
-        Ok(None) => {
-            let _ = raise_instance(TIME_INSTANCE, token.as_deref());
-            Ok(())
-        }
-        Ok(Some(lock)) => {
-            let app = TimeApp::new(lock)?;
-            app.run()?;
-            Ok(())
-        }
-        Err(err) => {
-            eprintln!("xtools-time: instance lock failed: {err}");
-            std::process::exit(1);
+    let mut lock = None;
+    for _ in 0..10 {
+        match claim_instance(TIME_INSTANCE) {
+            Ok(Some(l)) => {
+                lock = Some(l);
+                break;
+            }
+            Ok(None) => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(err) => {
+                eprintln!("xtools-time: instance lock failed: {err}");
+                std::process::exit(1);
+            }
         }
     }
+    let Some(lock) = lock else {
+        let _ = raise_instance(TIME_INSTANCE, token.as_deref());
+        return Ok(());
+    };
+    let app = TimeApp::new(lock)?;
+    app.run()?;
+    Ok(())
 }

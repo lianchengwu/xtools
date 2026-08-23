@@ -83,7 +83,6 @@ impl TransApp {
             });
         }
 
-
         // Input edited
         {
             let ui_weak = ui.as_weak();

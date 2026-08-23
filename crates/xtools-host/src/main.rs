@@ -5,19 +5,21 @@ mod overlay;
 mod paint;
 mod tray;
 
+use gtk4::gdk::prelude::*;
+use gtk4::glib;
+use gtk4::prelude::*;
+use gtk4::{Application, ApplicationWindow, CssProvider, DrawingArea, GestureDrag};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use gtk4::gdk::prelude::*;
-use gtk4::glib;
-use gtk4::prelude::*;
-use gtk4::{Application, ApplicationWindow, CssProvider, DrawingArea, GestureDrag};
+use std::time::Duration;
 
 use xtools_ui::{
     HOST_INSTANCE, SLOP, ToolId, claim_instance, func_radius, main_radius, raise_instance,
+    terminate_instance,
 };
 
 use crate::layout::{Rect, clamp_main, fan_seats, hit_disk, surface_rect, vis_scale};
@@ -268,6 +270,7 @@ fn handle_click(
 }
 
 fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
+    xtools_ui::kwin::ensure_pin_script();
     if !gtk4_layer_shell::is_supported() {
         eprintln!("xtools-host: layer-shell is not supported on this compositor");
         app.quit();
@@ -490,42 +493,41 @@ fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
 
     window.present();
 }
-fn mint_token(event: &gtk4::gdk::Event) -> Option<String> {
-    let display = event.display()?;
-    let ctx = display.app_launch_context();
-    ctx.set_timestamp(event.time());
-    let id = gtk4::gio::prelude::AppLaunchContextExt::startup_notify_id(
-        &ctx,
-        None::<&gtk4::gio::AppInfo>,
-        &[],
-    )?;
-    let s = id.to_string();
-    if s.is_empty() { None } else { Some(s) }
-}
-
 fn sibling_bin(name: &str) -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let path = exe.parent()?.join(name);
     path.is_file().then_some(path)
 }
 
-fn launch_tool(id: ToolId, event: Option<&gtk4::gdk::Event>) {
-    let token = event.and_then(mint_token);
-    match raise_instance(id.instance_name(), token.as_deref()) {
-        Ok(true) => return,
-        Ok(false) => {}
-        Err(_) => {}
-    }
+fn launch_tool(id: ToolId, _event: Option<&gtk4::gdk::Event>) {
+    let desktop = xtools_ui::kwin::current_desktop();
+    let _ = terminate_instance(id.instance_name());
     let Some(bin) = sibling_bin(id.binary_name()) else {
         eprintln!("xtools-host: missing sibling {}", id.binary_name());
         return;
     };
     let mut cmd = Command::new(bin);
-    if let Some(token) = token {
-        cmd.env("XDG_ACTIVATION_TOKEN", token);
+    cmd.env_remove("XDG_ACTIVATION_TOKEN");
+    cmd.env_remove("DESKTOP_STARTUP_ID");
+    cmd.env_remove("GIO_LAUNCHED_DESKTOP_FILE_PID");
+    cmd.env_remove("GIO_LAUNCHED_DESKTOP_FILE");
+    if let Some(desk) = &desktop {
+        cmd.env("XTOOLS_TARGET_DESKTOP", desk);
     }
-    if let Err(err) = cmd.spawn() {
-        eprintln!("xtools-host: spawn {}: {err}", id.binary_name());
+
+    match cmd.spawn() {
+        Ok(child) => {
+            if let Some(desk) = desktop {
+                let pid = child.id();
+                std::thread::spawn(move || {
+                    for _ in 0..12 {
+                        std::thread::sleep(Duration::from_millis(80));
+                        xtools_ui::kwin::pin_pid(pid, Some(&desk));
+                    }
+                });
+            }
+        }
+        Err(err) => eprintln!("xtools-host: spawn {}: {err}", id.binary_name()),
     }
 }
 

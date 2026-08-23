@@ -16,6 +16,25 @@ pub fn claim_instance(name: &str) -> io::Result<Option<UnixListener>> {
     }
 }
 
+/// Command received on single-instance socket.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InstanceCommand {
+    Raise(Option<String>),
+    Quit,
+}
+
+/// Connect to a live instance and write `QUIT\n` to instruct it to terminate.
+pub fn terminate_instance(name: &str) -> io::Result<bool> {
+    let addr = SocketAddr::from_abstract_name(name.as_bytes())?;
+    match UnixStream::connect_addr(&addr) {
+        Ok(mut stream) => {
+            stream.write_all(b"QUIT\n")?;
+            Ok(true)
+        }
+        Err(_) => Ok(false),
+    }
+}
+
 /// Connect to a live instance and write `RAISE` or `RAISE <token>`.
 /// `Ok(true)` wrote the line. `Ok(false)` means no live instance.
 pub fn raise_instance(name: &str, token: Option<&str>) -> io::Result<bool> {
@@ -41,8 +60,8 @@ pub fn raise_instance(name: &str, token: Option<&str>) -> io::Result<bool> {
     }
 }
 
-/// Read one RAISE line from a non-blocking listener. `None` if nothing ready or garbage.
-pub fn accept_raise(listener: &UnixListener) -> Option<Option<String>> {
+/// Read one command line from a non-blocking listener. `None` if nothing ready or garbage.
+pub fn accept_command(listener: &UnixListener) -> Option<InstanceCommand> {
     let (mut stream, _) = match listener.accept() {
         Ok(pair) => pair,
         Err(err) if err.kind() == io::ErrorKind::WouldBlock => return None,
@@ -62,16 +81,26 @@ pub fn accept_raise(listener: &UnixListener) -> Option<Option<String>> {
     if line.contains('\0') {
         return None;
     }
+    if line == "QUIT" {
+        return Some(InstanceCommand::Quit);
+    }
     if line == "RAISE" {
-        return Some(None);
+        return Some(InstanceCommand::Raise(None));
     }
     let rest = line.strip_prefix("RAISE ")?;
     if rest.is_empty() || rest.contains(' ') {
         return None;
     }
-    Some(Some(rest.to_string()))
+    Some(InstanceCommand::Raise(Some(rest.to_string())))
 }
 
+/// Read one RAISE line from a non-blocking listener. `None` if nothing ready or garbage.
+pub fn accept_raise(listener: &UnixListener) -> Option<Option<String>> {
+    match accept_command(listener) {
+        Some(InstanceCommand::Raise(token)) => Some(token),
+        _ => None,
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -95,5 +124,10 @@ mod tests {
         assert!(raise_instance(socket_name, Some("test-token-123")).unwrap());
         let raised_token = accept_raise(&lock).expect("should accept raise with token");
         assert_eq!(raised_token, Some("test-token-123".to_string()));
+
+        // Terminate instance
+        assert!(terminate_instance(socket_name).unwrap());
+        let cmd = accept_command(&lock).expect("should accept quit command");
+        assert_eq!(cmd, InstanceCommand::Quit);
     }
 }

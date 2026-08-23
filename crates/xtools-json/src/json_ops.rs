@@ -307,14 +307,8 @@ fn build_tree_recursive(
                 for (idx, (k, v)) in map.iter().enumerate() {
                     let child_comma = idx + 1 < total;
                     let k_display = format!("\"{}\": ", k);
-                    let child_id = build_tree_recursive(
-                        v,
-                        Some(id),
-                        depth + 1,
-                        k_display,
-                        child_comma,
-                        nodes,
-                    );
+                    let child_id =
+                        build_tree_recursive(v, Some(id), depth + 1, k_display, child_comma, nodes);
                     child_ids.push(child_id);
                 }
 
@@ -367,14 +361,8 @@ fn build_tree_recursive(
                 for (idx, v) in arr.iter().enumerate() {
                     let child_comma = idx + 1 < total;
                     let k_display = format!("[{}]: ", idx);
-                    let child_id = build_tree_recursive(
-                        v,
-                        Some(id),
-                        depth + 1,
-                        k_display,
-                        child_comma,
-                        nodes,
-                    );
+                    let child_id =
+                        build_tree_recursive(v, Some(id), depth + 1, k_display, child_comma, nodes);
                     child_ids.push(child_id);
                 }
 
@@ -523,7 +511,10 @@ mod tests {
     fn unescapes_unquoted_escaped_json() {
         let input = r#"{\"name\":\"Bob\",\"arr\":[1,2]}"#;
         let out = unescape_json(input).unwrap();
-        assert_eq!(out, "{\n  \"name\": \"Bob\",\n  \"arr\": [\n    1,\n    2\n  ]\n}");
+        assert_eq!(
+            out,
+            "{\n  \"name\": \"Bob\",\n  \"arr\": [\n    1,\n    2\n  ]\n}"
+        );
     }
 
     #[test]

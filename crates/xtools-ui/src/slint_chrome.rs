@@ -46,7 +46,7 @@ impl WindowDragState {
     }
 }
 
-/// Start a timer that polls the instance lock and raises the window when requested.
+/// Start a timer that polls the instance lock and handles raise or quit commands.
 pub fn setup_raise_timer(
     listener: UnixListener,
     window: slint::Weak<impl slint::ComponentHandle + 'static>,
@@ -54,15 +54,19 @@ pub fn setup_raise_timer(
     let timer = slint::Timer::default();
     timer.start(
         slint::TimerMode::Repeated,
-        Duration::from_millis(100),
-        move || {
-            if let Some(_token) = crate::instance::accept_raise(&listener) {
+        Duration::from_millis(50),
+        move || match crate::instance::accept_command(&listener) {
+            Some(crate::instance::InstanceCommand::Quit) => {
+                std::process::exit(0);
+            }
+            Some(crate::instance::InstanceCommand::Raise(_token)) => {
                 if let Some(ui) = window.upgrade() {
                     let _ = ui.window().show();
                     #[cfg(feature = "x11-skip-taskbar")]
                     crate::skip_taskbar::raise_x11_window();
                 }
             }
+            None => {}
         },
     );
     timer
@@ -75,10 +79,10 @@ pub fn setup_skip_taskbar_timer() -> slint::Timer {
     let tries = Arc::new(Mutex::new(0u8));
     timer.start(
         slint::TimerMode::Repeated,
-        Duration::from_millis(150),
+        Duration::from_millis(80),
         move || {
             let mut count = tries.lock();
-            if *count < 8 {
+            if *count < 12 {
                 crate::skip_taskbar::apply();
                 *count += 1;
             }
@@ -124,7 +128,6 @@ pub fn setup_auto_exit_on_focus_loss_timer() -> slint::Timer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use slint::ComponentHandle;
     #[test]
     fn test_drag_and_focus() {
         slint::slint! {
@@ -143,7 +146,8 @@ mod tests {
                 }
             }
         }
-        let Ok(Ok(win)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(TestWindow::new)) else {
+        let Ok(Ok(win)) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(TestWindow::new))
+        else {
             // Headless CI without display server or missing xkbcommon libs: skip GUI window test
             return;
         };

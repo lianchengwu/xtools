@@ -1,4 +1,5 @@
-//! Hide this process's X11 windows from the pager/taskbar, raise them, and check focus.
+//! Hide this process's X11 windows from the pager/taskbar, make them sticky across all
+//! virtual desktops, raise them, and check focus.
 
 use x11rb::connection::Connection;
 use x11rb::protocol::xproto::{
@@ -8,8 +9,10 @@ use x11rb::protocol::xproto::{
 use x11rb::wrapper::ConnectionExt as _;
 
 const NET_WM_STATE_ADD: u32 = 1;
+const ALL_DESKTOPS: u32 = 0xFFFF_FFFF;
 
 pub fn apply() {
+    crate::kwin::pin_self(crate::boot::target_desktop().as_deref());
     let Ok((conn, screen_num)) = x11rb::connect(None) else {
         return;
     };
@@ -25,23 +28,59 @@ pub fn apply() {
     let Ok(wm_state) = intern(&conn, b"_NET_WM_STATE") else {
         return;
     };
-    let Ok(skip) = intern(&conn, b"_NET_WM_STATE_SKIP_TASKBAR") else {
+    let Ok(skip_taskbar) = intern(&conn, b"_NET_WM_STATE_SKIP_TASKBAR") else {
         return;
     };
+    let Ok(skip_pager) = intern(&conn, b"_NET_WM_STATE_SKIP_PAGER") else {
+        return;
+    };
+    let Ok(sticky) = intern(&conn, b"_NET_WM_STATE_STICKY") else {
+        return;
+    };
+    let wm_desktop = intern(&conn, b"_NET_WM_DESKTOP").ok();
 
     let windows = find_process_windows(&conn, screen.root, client_list, wm_pid, pid);
+    let mask = EventMask::SUBSTRUCTURE_NOTIFY | EventMask::SUBSTRUCTURE_REDIRECT;
 
     for win in windows {
-        let _ = conn.change_property32(PropMode::REPLACE, win, wm_state, AtomEnum::ATOM, &[skip]);
-        let event = ClientMessageEvent::new(32, win, wm_state, [NET_WM_STATE_ADD, skip, 0, 1, 0]);
-        let mask = EventMask::SUBSTRUCTURE_NOTIFY | EventMask::SUBSTRUCTURE_REDIRECT;
-        let _ = conn.send_event(false, screen.root, mask, event);
+        let _ = conn.change_property32(
+            PropMode::REPLACE,
+            win,
+            wm_state,
+            AtomEnum::ATOM,
+            &[skip_taskbar, skip_pager, sticky],
+        );
+        if let Some(wm_desktop) = wm_desktop {
+            let _ = conn.change_property32(
+                PropMode::REPLACE,
+                win,
+                wm_desktop,
+                AtomEnum::CARDINAL,
+                &[ALL_DESKTOPS],
+            );
+            let event_desktop =
+                ClientMessageEvent::new(32, win, wm_desktop, [ALL_DESKTOPS, 2, 0, 0, 0]);
+            let _ = conn.send_event(false, screen.root, mask, event_desktop);
+        }
+
+        let event_skip = ClientMessageEvent::new(
+            32,
+            win,
+            wm_state,
+            [NET_WM_STATE_ADD, skip_taskbar, skip_pager, 1, 0],
+        );
+        let _ = conn.send_event(false, screen.root, mask, event_skip);
+
+        let event_sticky =
+            ClientMessageEvent::new(32, win, wm_state, [NET_WM_STATE_ADD, sticky, 0, 1, 0]);
+        let _ = conn.send_event(false, screen.root, mask, event_sticky);
     }
     let _ = conn.flush();
 }
 
-/// Raise and focus this process's X11 windows.
+/// Raise and focus this process's X11 windows, ensuring they are sticky on all desktops.
 pub fn raise_x11_window() {
+    crate::kwin::pin_self(crate::boot::target_desktop().as_deref());
     let Ok((conn, screen_num)) = x11rb::connect(None) else {
         return;
     };
@@ -57,12 +96,50 @@ pub fn raise_x11_window() {
     let Ok(active_window) = intern(&conn, b"_NET_ACTIVE_WINDOW") else {
         return;
     };
+    let Ok(wm_state) = intern(&conn, b"_NET_WM_STATE") else {
+        return;
+    };
+    let Ok(skip_taskbar) = intern(&conn, b"_NET_WM_STATE_SKIP_TASKBAR") else {
+        return;
+    };
+    let Ok(skip_pager) = intern(&conn, b"_NET_WM_STATE_SKIP_PAGER") else {
+        return;
+    };
+    let Ok(sticky) = intern(&conn, b"_NET_WM_STATE_STICKY") else {
+        return;
+    };
+    let wm_desktop = intern(&conn, b"_NET_WM_DESKTOP").ok();
 
     let windows = find_process_windows(&conn, screen.root, client_list, wm_pid, pid);
+    let mask = EventMask::SUBSTRUCTURE_NOTIFY | EventMask::SUBSTRUCTURE_REDIRECT;
 
     for win in windows {
         // Map if unmapped / minimized
         let _ = conn.map_window(win);
+
+        // Ensure sticky & all desktops state
+        let _ = conn.change_property32(
+            PropMode::REPLACE,
+            win,
+            wm_state,
+            AtomEnum::ATOM,
+            &[skip_taskbar, skip_pager, sticky],
+        );
+        if let Some(wm_desktop) = wm_desktop {
+            let _ = conn.change_property32(
+                PropMode::REPLACE,
+                win,
+                wm_desktop,
+                AtomEnum::CARDINAL,
+                &[ALL_DESKTOPS],
+            );
+            let event_desktop =
+                ClientMessageEvent::new(32, win, wm_desktop, [ALL_DESKTOPS, 2, 0, 0, 0]);
+            let _ = conn.send_event(false, screen.root, mask, event_desktop);
+        }
+        let event_sticky =
+            ClientMessageEvent::new(32, win, wm_state, [NET_WM_STATE_ADD, sticky, 0, 1, 0]);
+        let _ = conn.send_event(false, screen.root, mask, event_sticky);
 
         // Raise window above all siblings
         let _ = conn.configure_window(win, &ConfigureWindowAux::new().stack_mode(StackMode::ABOVE));
@@ -72,7 +149,6 @@ pub fn raise_x11_window() {
 
         // Send EWMH _NET_ACTIVE_WINDOW message to root window (source=2: pager/panel)
         let event = ClientMessageEvent::new(32, win, active_window, [2, 0, 0, 0, 0]);
-        let mask = EventMask::SUBSTRUCTURE_NOTIFY | EventMask::SUBSTRUCTURE_REDIRECT;
         let _ = conn.send_event(false, screen.root, mask, event);
     }
     let _ = conn.flush();

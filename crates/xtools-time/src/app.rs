@@ -63,7 +63,6 @@ impl TimeApp {
             });
         }
 
-
         // Seconds edited
         {
             let ui_weak = ui.as_weak();
