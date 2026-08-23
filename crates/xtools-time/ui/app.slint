@@ -1,12 +1,12 @@
-import { ToolShell, FieldWithAction, InlineError, Theme } from "@xtools-ui/components.slint";
+import { ToolShell, FieldWithAction, ActionButton, CopyButton, ValueInput, DropdownSelector, InlineError, Theme } from "@xtools-ui/components.slint";
 
 export component TimeWindow inherits Window {
     title: "时间戳转换";
     no-frame: true;
     background: Colors.transparent;
     default-font-family: "sans-serif";
-    width: 440px;
-    height: 380px;
+    width: 480px;
+    height: 400px;
 
     callback close-clicked();
     callback window-drag-started();
@@ -15,11 +15,16 @@ export component TimeWindow inherits Window {
     in-out property <string> seconds: "";
     in-out property <string> millis: "";
     in-out property <string> local: "";
+    in-out property <int> tz-index: 0;
+
+    in property <[string]> tz-options: [];
 
     in property <bool> sec-copied: false;
     in property <bool> ms-copied: false;
+    in property <bool> local-copied: false;
     in property <bool> sec-ok: true;
     in property <bool> ms-ok: true;
+    in property <bool> local-ok: true;
 
     in property <string> error-seconds: "";
     in property <string> error-millis: "";
@@ -30,7 +35,9 @@ export component TimeWindow inherits Window {
     callback local-edited(string);
     callback copy-seconds();
     callback copy-millis();
+    callback copy-local();
     callback now-clicked();
+    callback tz-changed(int);
 
     forward-focus: focus-scope;
     focus-scope := FocusScope {
@@ -88,16 +95,51 @@ export component TimeWindow inherits Window {
                 }
 
                 VerticalLayout {
-                    spacing: 4px;
-                    FieldWithAction {
-                        caption: "本地时间 (Local DateTime)";
-                        text <=> root.local;
-                        action-text: "⚡ 现在";
-                        is-primary: true;
-                        action-clicked => { root.now-clicked(); }
-                        edited(t) => { root.local-edited(t); }
-                        accepted(t) => { root.local-edited(t); }
+                    spacing: 5px;
+
+                    HorizontalLayout {
+                        alignment: space-between;
+                        Text {
+                            text: "时间 (DateTime)";
+                            font-size: Theme.font-size-small;
+                            font-weight: 600;
+                            color: Theme.muted;
+                            vertical-alignment: center;
+                        }
+
+                        DropdownSelector {
+                            label: "时区：";
+                            options: root.tz-options;
+                            selected-index <=> root.tz-index;
+                            selector-width: 250px;
+                            selection-changed(idx) => { root.tz-changed(idx); }
+                        }
                     }
+
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: stretch;
+
+                        ValueInput {
+                            text <=> root.local;
+                            horizontal-stretch: 1;
+                            edited(t) => { root.local-edited(t); }
+                            accepted(t) => { root.local-edited(t); }
+                        }
+
+                        ActionButton {
+                            text: "⚡ 现在";
+                            is-primary: true;
+                            clicked => { root.now-clicked(); }
+                        }
+
+                        CopyButton {
+                            copied: root.local-copied;
+                            enabled: root.local-ok;
+                            clicked => { root.copy-local(); }
+                        }
+                    }
+
                     if root.error-local != "" : InlineError {
                         error-text: root.error-local;
                     }

@@ -300,32 +300,35 @@ export component DropdownPopup inherits Rectangle {
     drop-shadow-blur: 16px;
     drop-shadow-color: #0000001E;
     drop-shadow-offset-y: 4px;
+    max-height: 260px;
 
-    VerticalLayout {
-        padding: 4px;
-        spacing: 2px;
+    ScrollView {
+        VerticalLayout {
+            padding: 4px;
+            spacing: 2px;
 
-        for opt[idx] in root.options : Rectangle {
-            height: 30px;
-            border-radius: 6px;
-            background: item-touch.has-hover ? Theme.secondary-hover : (idx == root.selected-index ? Theme.secondary : Colors.transparent);
+            for opt[idx] in root.options : Rectangle {
+                height: 30px;
+                border-radius: 6px;
+                background: item-touch.has-hover ? Theme.secondary-hover : (idx == root.selected-index ? Theme.secondary : Colors.transparent);
 
-            HorizontalLayout {
-                padding-left: 10px;
-                padding-right: 10px;
-                alignment: start;
-                Text {
-                    text: opt;
-                    font-size: Theme.font-size-body;
-                    font-weight: idx == root.selected-index ? 600 : 400;
-                    color: idx == root.selected-index ? Theme.primary : Theme.foreground;
-                    vertical-alignment: center;
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    alignment: start;
+                    Text {
+                        text: opt;
+                        font-size: Theme.font-size-body;
+                        font-weight: idx == root.selected-index ? 600 : 400;
+                        color: idx == root.selected-index ? Theme.primary : Theme.foreground;
+                        vertical-alignment: center;
+                    }
                 }
-            }
 
-            item-touch := TouchArea {
-                clicked => {
-                    root.selected(idx);
+                item-touch := TouchArea {
+                    clicked => {
+                        root.selected(idx);
+                    }
                 }
             }
         }
