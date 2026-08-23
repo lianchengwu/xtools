@@ -1,7 +1,18 @@
 [workspace]
 resolver = "3"
-members = ["crates/xtools-ui", "crates/xtools-host", "crates/xtools-time"]
-default-members = ["crates/xtools-host"]
+members = [
+    "crates/xtools-ui",
+    "crates/xtools-host",
+    "crates/xtools-time",
+    "crates/xtools-json",
+    "crates/xtools-trans",
+]
+default-members = [
+    "crates/xtools-host",
+    "crates/xtools-time",
+    "crates/xtools-json",
+    "crates/xtools-trans",
+]
 
 [workspace.package]
 edition = "2024"
@@ -10,3 +21,10 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 xtools-ui = { path = "crates/xtools-ui" }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

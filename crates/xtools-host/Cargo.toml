@@ -4,8 +4,22 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
+description = "Linux 桌面悬浮工具箱 (时间戳 / JSON / 翻译)"
+
+[package.metadata.generate-rpm]
+name = "xtools"
+summary = "Linux 桌面悬浮工具箱"
+assets = [
+    { source = "../../target/release/xtools-host", dest = "/usr/bin/xtools-host", mode = "755" },
+    { source = "../../target/release/xtools-time", dest = "/usr/bin/xtools-time", mode = "755" },
+    { source = "../../target/release/xtools-json", dest = "/usr/bin/xtools-json", mode = "755" },
+    { source = "../../target/release/xtools-trans", dest = "/usr/bin/xtools-trans", mode = "755" },
+    { source = "../../xtools.desktop", dest = "/usr/share/applications/xtools.desktop", mode = "644" },
+    { source = "../../xtools.svg", dest = "/usr/share/icons/hicolor/scalable/apps/xtools.svg", mode = "644" },
+]
 
 [dependencies]
 gtk4 = { version = "0.11.4", features = ["v4_12"] }
 gtk4-layer-shell = { version = "0.8.1", features = ["v1_3"] }
+ksni = { version = "0.3.6", default-features = false, features = ["async-io", "blocking"] }
 xtools-ui = { workspace = true }

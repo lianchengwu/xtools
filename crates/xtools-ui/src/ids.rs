@@ -30,8 +30,8 @@ impl ToolId {
     pub fn instance_name(self) -> &'static str {
         match self {
             ToolId::Time => TIME_INSTANCE,
-            ToolId::Json => "xtools-json",
-            ToolId::Trans => "xtools-trans",
+            ToolId::Json => JSON_INSTANCE,
+            ToolId::Trans => TRANS_INSTANCE,
         }
     }
 }
@@ -41,3 +41,9 @@ pub const HOST_INSTANCE: &str = "xtools-host";
 
 /// Abstract single-instance name for the timestamp tool.
 pub const TIME_INSTANCE: &str = "xtools-time";
+
+/// Abstract single-instance name for the JSON tool.
+pub const JSON_INSTANCE: &str = "xtools-json";
+
+/// Abstract single-instance name for the translate tool.
+pub const TRANS_INSTANCE: &str = "xtools-trans";

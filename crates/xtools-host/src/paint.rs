@@ -1,12 +1,7 @@
 use gtk4::cairo;
-use xtools_ui::{func_radius, main_radius, theme, ToolId, MARK_PX, ORB_FILL, ORB_MARK};
-
-fn fill_disk(cr: &cairo::Context, cx: f64, cy: f64, r: f64) {
-    cr.set_source_rgba(ORB_FILL.r, ORB_FILL.g, ORB_FILL.b, ORB_FILL.a);
-    cr.new_sub_path();
-    cr.arc(cx, cy, r, 0.0, std::f64::consts::TAU);
-    cr.fill().ok();
-}
+use gtk4::gdk::prelude::*;
+use gtk4::gdk_pixbuf::Pixbuf;
+use xtools_ui::{MARK_PX, ORB_FILL, ORB_MARK, ToolId, func_radius};
 
 fn mark_color(cr: &cairo::Context) {
     cr.set_source_rgba(ORB_MARK.r, ORB_MARK.g, ORB_MARK.b, ORB_MARK.a);
@@ -28,7 +23,11 @@ fn draw_clock(cr: &cairo::Context, cx: f64, cy: f64, fr: f64) {
 }
 
 fn draw_text_mark(cr: &cairo::Context, cx: f64, cy: f64, text: &str, scale: f64) {
-    cr.select_font_face("sans-serif", cairo::FontSlant::Normal, cairo::FontWeight::Bold);
+    cr.select_font_face(
+        "sans-serif",
+        cairo::FontSlant::Normal,
+        cairo::FontWeight::Bold,
+    );
     cr.set_font_size(MARK_PX * scale);
     let ext = cr
         .text_extents(text)
@@ -41,16 +40,26 @@ fn draw_text_mark(cr: &cairo::Context, cx: f64, cy: f64, text: &str, scale: f64)
     cr.show_text(text).ok();
 }
 
+const XTOOLS_SVG: &[u8] = include_bytes!("../../../xtools.svg");
+
+thread_local! {
+    static BASE_ICON: Option<Pixbuf> = Pixbuf::from_read(std::io::Cursor::new(XTOOLS_SVG)).ok();
+}
+
 pub fn draw_main(cr: &cairo::Context, cx: f64, cy: f64, scale: f64) {
-    let _ = theme::MAIN_D;
-    let r = main_radius() * scale;
-    fill_disk(cr, cx, cy, r);
-    cr.set_source_rgba(ORB_MARK.r, ORB_MARK.g, ORB_MARK.b, 0.55);
-    cr.set_line_width((1.5 * scale).max(1.0));
-    cr.new_sub_path();
-    cr.arc(cx, cy, r - 1.0, 0.0, std::f64::consts::TAU);
-    cr.stroke().ok();
-    draw_text_mark(cr, cx, cy, "x", scale);
+    let icon_size = (32.0 * scale).round() as i32;
+    BASE_ICON.with(|base| {
+        if let Some(pixbuf) = base.as_ref().and_then(|pb| {
+            pb.scale_simple(icon_size, icon_size, gtk4::gdk_pixbuf::InterpType::Bilinear)
+        }) {
+            let px = cx - f64::from(icon_size) / 2.0;
+            let py = cy - f64::from(icon_size) / 2.0;
+            cr.set_source_pixbuf(&pixbuf, px, py);
+            cr.paint().ok();
+        } else {
+            draw_text_mark(cr, cx, cy, "x", scale);
+        }
+    });
 }
 
 pub fn draw_func(cr: &cairo::Context, id: ToolId, cx: f64, cy: f64, t: f64, scale: f64) {
@@ -63,6 +72,11 @@ pub fn draw_func(cr: &cairo::Context, id: ToolId, cx: f64, cy: f64, t: f64, scal
     cr.new_sub_path();
     cr.arc(cx, cy, fr, 0.0, std::f64::consts::TAU);
     cr.fill().ok();
+    cr.set_source_rgba(ORB_MARK.r, ORB_MARK.g, ORB_MARK.b, 0.20 * t.clamp(0.0, 1.0));
+    cr.set_line_width((1.0 * scale).max(1.0));
+    cr.new_sub_path();
+    cr.arc(cx, cy, fr - 0.5, 0.0, std::f64::consts::TAU);
+    cr.stroke().ok();
     cr.set_source_rgba(ORB_MARK.r, ORB_MARK.g, ORB_MARK.b, t.clamp(0.0, 1.0));
     match id {
         ToolId::Time => draw_clock(cr, cx, cy, fr),

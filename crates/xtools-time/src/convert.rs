@@ -29,3 +29,36 @@ fn format_ts(ts: Timestamp) -> (i64, i64, String) {
     let local = zoned.strftime(LOCAL_FMT).to_string();
     (ts.as_second(), ts.as_millisecond(), local)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn seconds_conversion_roundtrip() {
+        let (s, ms, local) = from_seconds(1700000000).unwrap();
+        assert_eq!(s, 1700000000);
+        assert_eq!(ms, 1700000000000);
+        assert!(!local.is_empty());
+    }
+
+    #[test]
+    fn millis_conversion_roundtrip() {
+        let (s, ms, local) = from_millis(1700000000123).unwrap();
+        assert_eq!(s, 1700000000);
+        assert_eq!(ms, 1700000000123);
+        assert!(!local.is_empty());
+    }
+
+    #[test]
+    fn local_conversion_roundtrip() {
+        let (_, _, local) = from_seconds(1700000000).unwrap();
+        let (s2, _, _) = from_local(&local).unwrap();
+        assert_eq!(s2, 1700000000);
+    }
+
+    #[test]
+    fn invalid_local_rejected() {
+        assert!(from_local("invalid-date-string").is_err());
+    }
+}

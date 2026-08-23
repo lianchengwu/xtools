@@ -1,1 +1,0 @@
-{"content":"gtk4-layer-shell is the Wayland overlay path (Layer::Overlay) on wlroots compositors. GNOME Mutter does not implement wlr-layer-shell. Input region click-through is a separate GdkSurface API, not a layer-shell one-liner.","source":"web","provider":"websearch","confidence":"MEDIUM","fetched_at":"2026-08-19T14:03:16.359Z","ttl":86400000,"kind":"web"}

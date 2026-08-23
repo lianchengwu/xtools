@@ -1,0 +1,12 @@
+[Desktop Entry]
+Name=xtools
+GenericName=Desktop Floating Toolbox
+GenericName[zh_CN]=桌面悬浮工具箱
+Comment=Linux 桌面悬浮工具箱 (时间戳 / JSON / 翻译)
+Exec=xtools-host
+Icon=xtools
+Terminal=false
+Type=Application
+Categories=Utility;Development;
+StartupNotify=true
+Keywords=toolbox;json;timestamp;translate;

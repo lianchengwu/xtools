@@ -1,8 +1,6 @@
 use gtk4::cairo::{self, RectangleInt};
 use gtk4::gdk::{self, prelude::*};
 use gtk4::prelude::*;
-use xtools_ui::main_radius;
-
 /// Scanline disk region. Not a bounding square.
 pub fn disk_region(cx: f64, cy: f64, radius: f64) -> cairo::Region {
     let region = cairo::Region::create();

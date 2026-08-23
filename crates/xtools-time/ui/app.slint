@@ -1,0 +1,108 @@
+import { ToolShell, FieldWithAction, InlineError, Theme } from "@xtools-ui/components.slint";
+
+export component TimeWindow inherits Window {
+    title: "时间戳转换";
+    no-frame: true;
+    background: Colors.transparent;
+    default-font-family: "sans-serif";
+    width: 440px;
+    height: 380px;
+
+    callback close-clicked();
+    callback window-drag-started();
+    callback window-dragged(length, length);
+
+    in-out property <string> seconds: "";
+    in-out property <string> millis: "";
+    in-out property <string> local: "";
+
+    in property <bool> sec-copied: false;
+    in property <bool> ms-copied: false;
+    in property <bool> sec-ok: true;
+    in property <bool> ms-ok: true;
+
+    in property <string> error-seconds: "";
+    in property <string> error-millis: "";
+    in property <string> error-local: "";
+
+    callback seconds-edited(string);
+    callback millis-edited(string);
+    callback local-edited(string);
+    callback copy-seconds();
+    callback copy-millis();
+    callback now-clicked();
+
+    forward-focus: focus-scope;
+    focus-scope := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.close-clicked();
+                return accept;
+            }
+            reject
+        }
+
+        ToolShell {
+            title: root.title;
+            icon: "⏱";
+            close-clicked => { root.close-clicked(); }
+            window-drag-started => { root.window-drag-started(); }
+            window-dragged(dx, dy) => { root.window-dragged(dx, dy); }
+
+            VerticalLayout {
+                spacing: 16px;
+                alignment: start;
+
+                VerticalLayout {
+                    spacing: 4px;
+                    FieldWithAction {
+                        caption: "秒 (Unix Timestamp / s)";
+                        text <=> root.seconds;
+                        is-copy: true;
+                        action-copied: root.sec-copied;
+                        action-enabled: root.sec-ok;
+                        action-clicked => { root.copy-seconds(); }
+                        edited(t) => { root.seconds-edited(t); }
+                        accepted(t) => { root.seconds-edited(t); }
+                    }
+                    if root.error-seconds != "" : InlineError {
+                        error-text: root.error-seconds;
+                    }
+                }
+
+                VerticalLayout {
+                    spacing: 4px;
+                    FieldWithAction {
+                        caption: "毫秒 (Unix Timestamp / ms)";
+                        text <=> root.millis;
+                        is-copy: true;
+                        action-copied: root.ms-copied;
+                        action-enabled: root.ms-ok;
+                        action-clicked => { root.copy-millis(); }
+                        edited(t) => { root.millis-edited(t); }
+                        accepted(t) => { root.millis-edited(t); }
+                    }
+                    if root.error-millis != "" : InlineError {
+                        error-text: root.error-millis;
+                    }
+                }
+
+                VerticalLayout {
+                    spacing: 4px;
+                    FieldWithAction {
+                        caption: "本地时间 (Local DateTime)";
+                        text <=> root.local;
+                        action-text: "⚡ 现在";
+                        is-primary: true;
+                        action-clicked => { root.now-clicked(); }
+                        edited(t) => { root.local-edited(t); }
+                        accepted(t) => { root.local-edited(t); }
+                    }
+                    if root.error-local != "" : InlineError {
+                        error-text: root.error-local;
+                    }
+                }
+            }
+        }
+    }
+}

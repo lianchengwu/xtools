@@ -1,5 +1,5 @@
 use gtk4::gdk;
-use xtools_ui::{func_radius, main_radius, orbit_radius, ToolId, GAP};
+use xtools_ui::{GAP, ToolId, func_radius, main_radius, orbit_radius};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Rect {
@@ -10,6 +10,7 @@ pub struct Rect {
 }
 
 impl Rect {
+    #[allow(dead_code)]
     pub fn from_monitor(geo: &gdk::Rectangle) -> Self {
         Self {
             x: f64::from(geo.x()),
@@ -38,8 +39,8 @@ pub fn vis_scale(surface: Rect) -> f64 {
         1.0
     }
 }
-
 /// D-16: mid-right, vertically centered, full disk on-screen.
+#[allow(dead_code)]
 pub fn default_main_center(surface: Rect, main_r: f64) -> (f64, f64) {
     let inset = main_r.max(8.0);
     let cx = surface.w - inset;
@@ -71,10 +72,7 @@ fn seat_at(main: (f64, f64), angle: f64, r: f64) -> (f64, f64) {
 }
 
 fn disk_inside(c: (f64, f64), r: f64, mon: Rect) -> bool {
-    c.0 - r >= mon.x
-        && c.0 + r <= mon.x + mon.w
-        && c.1 - r >= mon.y
-        && c.1 + r <= mon.y + mon.h
+    c.0 - r >= mon.x && c.0 + r <= mon.x + mon.w && c.1 - r >= mon.y && c.1 + r <= mon.y + mon.h
 }
 
 /// Fan-above seats for `ToolId::ALL`. Rotate/shrink so every function disk stays on the output.

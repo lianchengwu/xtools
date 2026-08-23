@@ -1,15 +1,19 @@
-//! Shared tokens, instance lock, and optional egui chrome.
+//! Shared tokens, instance lock, and Slint chrome.
 
+pub mod boot;
 pub mod ids;
 pub mod instance;
 pub mod theme;
 
-#[cfg(feature = "egui-chrome")]
-pub mod chrome;
+#[cfg(feature = "slint-chrome")]
+pub mod slint_chrome;
 
-pub use ids::{HOST_INSTANCE, TIME_INSTANCE, ToolId};
+#[cfg(feature = "x11-skip-taskbar")]
+pub mod skip_taskbar;
+pub use boot::{prefer_x11_for_skip_taskbar, take_activation_token};
+pub use ids::{HOST_INSTANCE, JSON_INSTANCE, TIME_INSTANCE, TRANS_INSTANCE, ToolId};
 pub use instance::{accept_raise, claim_instance, raise_instance};
 pub use theme::{
-    Color, FUNC_D, GAP, MAIN_D, MARK_PX, ORB_FILL, ORB_MARK, POP_MS, SLOP, func_radius,
-    main_radius, orbit_radius,
+    CLEAR_COLOR, Color, FUNC_D, GAP, MAIN_D, MARK_PX, ORB_FILL, ORB_MARK, POP_MS, SLOP,
+    func_radius, main_radius, orbit_radius,
 };

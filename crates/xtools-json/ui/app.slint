@@ -1,0 +1,375 @@
+import { ToolShell, MultilineEditor, ActionButton, CopyButton, InlineError, InlineNote, Theme } from "@xtools-ui/components.slint";
+import { ScrollView } from "std-widgets.slint";
+
+export struct JsonNodeItem {
+    id: int,
+    depth: int,
+    key-text: string,
+    node-type: string,
+    value-text: string,
+    summary-text: string,
+    is-expandable: bool,
+    is-expanded: bool,
+    has-comma: bool,
+}
+
+component JsonRow inherits Rectangle {
+    in property <JsonNodeItem> item;
+    callback toggle-fold(int);
+
+    height: 24px;
+    border-radius: 4px;
+    background: touch.has-hover ? #F1F5F9 : Colors.transparent;
+
+    touch := TouchArea {
+        clicked => {
+            if (root.item.is-expandable) {
+                root.toggle-fold(root.item.id);
+            }
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: 8px + (root.item.depth * 16px);
+        padding-right: 8px;
+        spacing: 4px;
+        alignment: start;
+
+        // Toggle button
+        if root.item.is-expandable : Rectangle {
+            width: 18px;
+            height: 18px;
+            border-radius: 3px;
+            background: btn-touch.has-hover ? #E2E8F0 : Colors.transparent;
+
+            Text {
+                text: root.item.is-expanded ? "▼" : "▶";
+                font-size: 10px;
+                color: #64748B;
+                vertical-alignment: center;
+                horizontal-alignment: center;
+            }
+
+            btn-touch := TouchArea {
+                clicked => {
+                    root.toggle-fold(root.item.id);
+                }
+            }
+        }
+
+        if !root.item.is-expandable : Rectangle {
+            width: 18px;
+            height: 18px;
+        }
+
+        // Key name
+        if root.item.key-text != "" : Text {
+            text: root.item.key-text;
+            font-family: Theme.font-mono;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1E40AF;
+            vertical-alignment: center;
+        }
+
+        // Value text or opening bracket
+        if root.item.value-text != "" : Text {
+            text: root.item.value-text;
+            font-family: Theme.font-mono;
+            font-size: 13px;
+            color: root.item.node-type == "string" ? #059669
+                 : root.item.node-type == "number" ? #D97706
+                 : root.item.node-type == "boolean" ? #EA580C
+                 : root.item.node-type == "null" ? #94A3B8
+                 : #334155;
+            font-italic: root.item.node-type == "null";
+            vertical-alignment: center;
+        }
+
+        // Collapsed summary tag
+        if !root.item.is-expanded && root.item.is-expandable : Rectangle {
+            height: 18px;
+            border-radius: 4px;
+            background: #F1F5F9;
+            border-width: 1px;
+            border-color: #CBD5E1;
+
+            HorizontalLayout {
+                padding-left: 6px;
+                padding-right: 6px;
+                alignment: center;
+
+                Text {
+                    text: root.item.summary-text;
+                    font-size: 11px;
+                    font-weight: 500;
+                    color: #475569;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        // Trailing comma
+        if root.item.has-comma : Text {
+            text: ",";
+            font-family: Theme.font-mono;
+            font-size: 13px;
+            color: #64748B;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component JsonWindow inherits Window {
+    title: "JSON 格式化与校验";
+    no-frame: true;
+    background: Colors.transparent;
+    default-font-family: "sans-serif";
+    width: 580px;
+    height: 600px;
+
+    callback close-clicked();
+    callback window-drag-started();
+    callback window-dragged(length, length);
+
+    in-out property <string> text: "";
+    in property <bool> copied: false;
+    in property <bool> can-copy: false;
+    in property <string> error-text: "";
+    in property <string> note-text: "";
+    in-out property <int> view-mode: 0; // 0 = Text Edit, 1 = Tree Fold
+    in property <[JsonNodeItem]> tree-items: [];
+
+    callback format-clicked();
+    callback minify-clicked();
+    callback unescape-clicked();
+    callback validate-clicked();
+    callback copy-clicked();
+    callback text-edited(string);
+    callback switch-mode(int);
+    callback toggle-fold(int);
+    callback expand-all-clicked();
+    callback collapse-all-clicked();
+    callback fold-level-clicked(int);
+
+    forward-focus: focus-scope;
+    focus-scope := FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.close-clicked();
+                return accept;
+            }
+            reject
+        }
+
+        ToolShell {
+            title: root.title;
+            icon: "{ }";
+            close-clicked => { root.close-clicked(); }
+            window-drag-started => { root.window-drag-started(); }
+            window-dragged(dx, dy) => { root.window-dragged(dx, dy); }
+
+            VerticalLayout {
+                spacing: 10px;
+                alignment: stretch;
+
+                // Mode switcher and toolbar header
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: space-between;
+
+                    // Mode switch tabs
+                    Rectangle {
+                        border-radius: Theme.radius-control;
+                        background: #E2E8F0;
+                        height: 32px;
+
+                        HorizontalLayout {
+                            padding: 2px;
+                            spacing: 2px;
+                            // Text mode
+                            Rectangle {
+                                border-radius: Theme.radius-control - 2px;
+                                background: root.view-mode == 0 ? #FFFFFF : Colors.transparent;
+
+                                HorizontalLayout {
+                                    padding-left: 10px;
+                                    padding-right: 10px;
+                                    alignment: center;
+
+                                    Text {
+                                        text: "📝 源码编辑";
+                                        font-size: Theme.font-size-small;
+                                        font-weight: root.view-mode == 0 ? 600 : 500;
+                                        color: root.view-mode == 0 ? Theme.foreground : Theme.muted;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                TouchArea {
+                                    clicked => { root.switch-mode(0); }
+                                }
+                            }
+
+                            // Tree fold mode
+                            Rectangle {
+                                border-radius: Theme.radius-control - 2px;
+                                background: root.view-mode == 1 ? #FFFFFF : Colors.transparent;
+
+                                HorizontalLayout {
+                                    padding-left: 10px;
+                                    padding-right: 10px;
+                                    alignment: center;
+
+                                    Text {
+                                        text: "🌲 树形折叠";
+                                        font-size: Theme.font-size-small;
+                                        font-weight: root.view-mode == 1 ? 600 : 500;
+                                        color: root.view-mode == 1 ? Theme.primary : Theme.muted;
+                                        vertical-alignment: center;
+                                    }
+                                }
+
+                                TouchArea {
+                                    clicked => { root.switch-mode(1); }
+                                }
+                            }
+                        }
+                    }
+
+                    // Tree mode quick fold tools
+                    if root.view-mode == 1 : HorizontalLayout {
+                        spacing: 6px;
+                        alignment: end;
+
+                        ActionButton {
+                            text: "全部展开";
+                            min-btn-width: 60px;
+                            clicked => { root.expand-all-clicked(); }
+                        }
+
+                        ActionButton {
+                            text: "全部折叠";
+                            min-btn-width: 60px;
+                            clicked => { root.collapse-all-clicked(); }
+                        }
+
+                        ActionButton {
+                            text: "折叠至2层";
+                            min-btn-width: 65px;
+                            clicked => { root.fold-level-clicked(2); }
+                        }
+                    }
+                }
+
+                // Main editor / Tree viewer area
+                if root.view-mode == 0 : MultilineEditor {
+                    text <=> root.text;
+                    vertical-stretch: 1;
+                    edited(t) => { root.text-edited(t); }
+                }
+
+                if root.view-mode == 1 : Rectangle {
+                    vertical-stretch: 1;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.border;
+                    background: Theme.card-bg;
+                    clip: true;
+
+                    ScrollView {
+                        viewport-width: self.width;
+
+                        VerticalLayout {
+                            alignment: start;
+                            spacing: 1px;
+                            padding-top: 6px;
+                            padding-bottom: 6px;
+                            padding-left: 4px;
+                            padding-right: 4px;
+
+                            for item in root.tree-items : JsonRow {
+                                item: item;
+                                toggle-fold(id) => { root.toggle-fold(id); }
+                            }
+                        }
+                    }
+                }
+
+                // Action Buttons
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: start;
+
+                    ActionButton {
+                        text: "✨ 格式化";
+                        is-primary: true;
+                        clicked => { root.format-clicked(); }
+                    }
+
+                    ActionButton {
+                        text: "⚡ 压缩";
+                        clicked => { root.minify-clicked(); }
+                    }
+
+                    ActionButton {
+                        text: "🔓 去转义";
+                        clicked => { root.unescape-clicked(); }
+                    }
+
+                    ActionButton {
+                        text: "🛡 校验";
+                        clicked => { root.validate-clicked(); }
+                    }
+
+                    CopyButton {
+                        copied: root.copied;
+                        enabled: root.can-copy;
+                        clicked => { root.copy-clicked(); }
+                    }
+                }
+
+                // Error message banner
+                if root.error-text != "" : InlineError {
+                    error-text: root.error-text;
+                }
+
+                // Success / Note message banner
+                if root.note-text != "" && root.error-text == "" : HorizontalLayout {
+                    alignment: start;
+                    spacing: 6px;
+
+                    Rectangle {
+                        border-radius: Theme.radius-control;
+                        background: Theme.success-bg;
+                        border-width: 1px;
+                        border-color: Theme.success-border;
+
+                        HorizontalLayout {
+                            padding-left: 10px;
+                            padding-right: 10px;
+                            padding-top: 6px;
+                            padding-bottom: 6px;
+                            spacing: 6px;
+                            alignment: start;
+
+                            Text {
+                                text: "✓";
+                                font-size: Theme.font-size-small;
+                                font-weight: 700;
+                                color: Theme.success;
+                            }
+
+                            Text {
+                                text: root.note-text;
+                                font-size: Theme.font-size-small;
+                                font-weight: 600;
+                                color: Theme.success;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

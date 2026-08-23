@@ -1,4 +1,3 @@
-use gtk4::prelude::*;
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 
 /// Floating overlay. Do not stretch all four edges — KWin then keeps a 200px default.

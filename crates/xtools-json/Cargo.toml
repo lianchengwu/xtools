@@ -1,12 +1,12 @@
 [package]
-name = "xtools-time"
+name = "xtools-json"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-jiff = "0.2.35"
+serde_json = { version = "1.0.151", features = ["preserve_order"] }
 slint = "1.17.1"
 xtools-ui = { workspace = true, features = ["slint-chrome", "x11-skip-taskbar"] }
 

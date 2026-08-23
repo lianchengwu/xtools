@@ -1,28 +1,28 @@
 mod app;
-mod convert;
+mod engine;
 
 use xtools_ui::{
-    TIME_INSTANCE, claim_instance, prefer_x11_for_skip_taskbar, raise_instance,
+    TRANS_INSTANCE, claim_instance, prefer_x11_for_skip_taskbar, raise_instance,
     take_activation_token,
 };
 
-use crate::app::TimeApp;
+use crate::app::TransApp;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     prefer_x11_for_skip_taskbar();
     let token = take_activation_token();
-    match claim_instance(TIME_INSTANCE) {
+    match claim_instance(TRANS_INSTANCE) {
         Ok(None) => {
-            let _ = raise_instance(TIME_INSTANCE, token.as_deref());
+            let _ = raise_instance(TRANS_INSTANCE, token.as_deref());
             Ok(())
         }
         Ok(Some(lock)) => {
-            let app = TimeApp::new(lock)?;
+            let app = TransApp::new(lock)?;
             app.run()?;
             Ok(())
         }
         Err(err) => {
-            eprintln!("xtools-time: instance lock failed: {err}");
+            eprintln!("xtools-trans: instance lock failed: {err}");
             std::process::exit(1);
         }
     }

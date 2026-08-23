@@ -71,3 +71,29 @@ pub fn accept_raise(listener: &UnixListener) -> Option<Option<String>> {
     }
     Some(Some(rest.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn claim_and_raise_instance_flow() {
+        let socket_name = "xtools-test-instance-flow";
+        let lock = claim_instance(socket_name)
+            .unwrap()
+            .expect("should claim socket");
+
+        // Second claim returns None
+        assert!(claim_instance(socket_name).unwrap().is_none());
+
+        // Raise without token
+        assert!(raise_instance(socket_name, None).unwrap());
+        let raised = accept_raise(&lock).expect("should accept raise");
+        assert_eq!(raised, None);
+
+        // Raise with token
+        assert!(raise_instance(socket_name, Some("test-token-123")).unwrap());
+        let raised_token = accept_raise(&lock).expect("should accept raise with token");
+        assert_eq!(raised_token, Some("test-token-123".to_string()));
+    }
+}

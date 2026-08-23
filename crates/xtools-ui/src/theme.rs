@@ -13,12 +13,14 @@ impl Color {
     }
 }
 
-/// Dark opaque disk. Not an accent wash. Not translucent.
-pub const ORB_FILL: Color = Color::rgba(0.12, 0.12, 0.14, 1.0);
+/// Light opaque disk. Clean off-white canvas.
+pub const ORB_FILL: Color = Color::rgba(0.96, 0.96, 0.97, 1.0);
 
-/// Light mark on the disk.
-pub const ORB_MARK: Color = Color::rgba(0.92, 0.93, 0.95, 1.0);
+/// Dark mark / text on the disk.
+pub const ORB_MARK: Color = Color::rgba(0.11, 0.12, 0.15, 1.0);
 
+/// Window clear color in sRGB floats [r, g, b, a].
+pub const CLEAR_COLOR: [f32; 4] = [0.96, 0.96, 0.97, 1.0];
 /// Pango mark size in logical px.
 pub const MARK_PX: f64 = 16.0;
 

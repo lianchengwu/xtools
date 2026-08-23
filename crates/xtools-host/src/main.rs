@@ -3,25 +3,24 @@ mod input;
 mod layout;
 mod overlay;
 mod paint;
+mod tray;
 
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
-
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use gtk4::gdk::prelude::*;
 use gtk4::glib;
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, CssProvider, DrawingArea, GestureDrag};
 
 use xtools_ui::{
-    claim_instance, func_radius, main_radius, raise_instance, ToolId, HOST_INSTANCE, SLOP,
-    TIME_INSTANCE,
+    HOST_INSTANCE, SLOP, ToolId, claim_instance, func_radius, main_radius, raise_instance,
 };
 
-use crate::layout::{
-    clamp_main, default_main_center, fan_seats, hit_disk, surface_rect, vis_scale, Rect,
-};
+use crate::layout::{Rect, clamp_main, fan_seats, hit_disk, surface_rect, vis_scale};
 
 #[derive(Clone, Copy, Debug)]
 enum Menu {
@@ -58,9 +57,9 @@ struct Host {
     ticking: bool,
     last_t: f64,
     seated: bool,
-    _instance: std::os::unix::net::UnixListener,
+    _instance: Rc<std::os::unix::net::UnixListener>,
+    _hold_guard: gtk4::gio::ApplicationHoldGuard,
 }
-
 impl Host {
     fn vis(&self) -> f64 {
         vis_scale(self.monitor)
@@ -250,10 +249,8 @@ fn handle_click(
     };
 
     if let Some(id) = on_func {
-        if id == ToolId::Time {
-            let ev = state.borrow().last_pointer_event.clone();
-            launch_time(ev.as_ref());
-        }
+        let ev = state.borrow().last_pointer_event.clone();
+        launch_tool(id, ev.as_ref());
         begin_collapse(area, state);
         return;
     }
@@ -295,6 +292,60 @@ fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
     area.set_vexpand(true);
     window.set_child(Some(&area));
 
+    let visible_state = Arc::new(AtomicBool::new(true));
+    let (tray_tx, tray_rx) = std::sync::mpsc::channel::<tray::TrayAction>();
+
+    let hold_guard = app.hold();
+
+    let instance = Rc::new(instance);
+    let _ = instance.set_nonblocking(true);
+    {
+        let instance_for_raise = Rc::clone(&instance);
+        let win_for_tray = window.clone();
+        let app_for_tray = app.clone();
+        let area_for_tray = area.clone();
+        let vis_for_tray = Arc::clone(&visible_state);
+
+        glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+            while let Ok(action) = tray_rx.try_recv() {
+                match action {
+                    tray::TrayAction::Show => {
+                        vis_for_tray.store(true, Ordering::Relaxed);
+                        win_for_tray.set_visible(true);
+                        win_for_tray.present();
+                        area_for_tray.queue_draw();
+                    }
+                    tray::TrayAction::Hide => {
+                        vis_for_tray.store(false, Ordering::Relaxed);
+                        win_for_tray.set_visible(false);
+                    }
+                    tray::TrayAction::Toggle => {
+                        let next = !vis_for_tray.load(Ordering::Relaxed);
+                        vis_for_tray.store(next, Ordering::Relaxed);
+                        win_for_tray.set_visible(next);
+                        if next {
+                            win_for_tray.present();
+                            area_for_tray.queue_draw();
+                        }
+                    }
+                    tray::TrayAction::Quit => {
+                        app_for_tray.quit();
+                    }
+                }
+            }
+
+            if let Some(_token) = xtools_ui::accept_raise(&instance_for_raise) {
+                vis_for_tray.store(true, Ordering::Relaxed);
+                win_for_tray.set_visible(true);
+                win_for_tray.present();
+                area_for_tray.queue_draw();
+            }
+
+            glib::ControlFlow::Continue
+        });
+    }
+
+    tray::spawn_tray(tray_tx, visible_state);
     let state = Rc::new(RefCell::new(Host {
         main: (0.0, 0.0),
         origin_main: (0.0, 0.0),
@@ -311,6 +362,7 @@ fn build_ui(app: &Application, instance: std::os::unix::net::UnixListener) {
         last_t: 0.0,
         seated: false,
         _instance: instance,
+        _hold_guard: hold_guard,
     }));
 
     {
@@ -448,11 +500,7 @@ fn mint_token(event: &gtk4::gdk::Event) -> Option<String> {
         &[],
     )?;
     let s = id.to_string();
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
+    if s.is_empty() { None } else { Some(s) }
 }
 
 fn sibling_bin(name: &str) -> Option<PathBuf> {
@@ -461,15 +509,15 @@ fn sibling_bin(name: &str) -> Option<PathBuf> {
     path.is_file().then_some(path)
 }
 
-fn launch_time(event: Option<&gtk4::gdk::Event>) {
+fn launch_tool(id: ToolId, event: Option<&gtk4::gdk::Event>) {
     let token = event.and_then(mint_token);
-    match raise_instance(TIME_INSTANCE, token.as_deref()) {
+    match raise_instance(id.instance_name(), token.as_deref()) {
         Ok(true) => return,
         Ok(false) => {}
         Err(_) => {}
     }
-    let Some(bin) = sibling_bin(ToolId::Time.binary_name()) else {
-        eprintln!("xtools-host: missing sibling {}", ToolId::Time.binary_name());
+    let Some(bin) = sibling_bin(id.binary_name()) else {
+        eprintln!("xtools-host: missing sibling {}", id.binary_name());
         return;
     };
     let mut cmd = Command::new(bin);
@@ -477,14 +525,17 @@ fn launch_time(event: Option<&gtk4::gdk::Event>) {
         cmd.env("XDG_ACTIVATION_TOKEN", token);
     }
     if let Err(err) = cmd.spawn() {
-        eprintln!("xtools-host: spawn xtools-time: {err}");
+        eprintln!("xtools-host: spawn {}: {err}", id.binary_name());
     }
 }
 
 fn main() {
     let instance = match claim_instance(HOST_INSTANCE) {
         Ok(Some(listener)) => listener,
-        Ok(None) => return,
+        Ok(None) => {
+            let _ = raise_instance(HOST_INSTANCE, None);
+            return;
+        }
         Err(err) => {
             eprintln!("xtools-host: instance lock failed: {err}");
             std::process::exit(1);
