@@ -28,10 +28,26 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            pkg-config \
             libgtk-4-dev \
-            libgtk4-layer-shell-dev \
             libfontconfig1-dev \
+            libwayland-dev \
+            wayland-protocols \
+            gobject-introspection \
+            meson \
+            ninja-build \
             rpm
+
+      - name: Install gtk4-layer-shell
+        run: |
+          git clone --depth 1 https://github.com/wmww/gtk4-layer-shell.git
+          cd gtk4-layer-shell
+          meson setup build --prefix=/usr -Dexamples=false -Ddocs=false -Dtests=false
+          ninja -C build
+          sudo ninja -C build install
+          sudo ldconfig
+          cd ..
+          rm -rf gtk4-layer-shell
 
       - name: Install Packaging Tools (cargo-deb & cargo-generate-rpm)
         uses: taiki-e/install-action@v2
