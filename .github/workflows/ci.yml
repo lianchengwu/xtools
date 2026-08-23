@@ -32,6 +32,7 @@ jobs:
             libwayland-dev \
             wayland-protocols \
             gobject-introspection \
+            valac \
             meson \
             ninja-build
 
@@ -39,7 +40,12 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/wmww/gtk4-layer-shell.git
           cd gtk4-layer-shell
-          meson setup build --prefix=/usr -Dexamples=false -Ddocs=false -Dtests=false
+          meson setup build --prefix=/usr \
+            -Dexamples=false \
+            -Ddocs=false \
+            -Dtests=false \
+            -Dvapi=false \
+            -Dintrospection=false
           ninja -C build
           sudo ninja -C build install
           sudo ldconfig
