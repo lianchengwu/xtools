@@ -1,0 +1,96 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-release:
+    name: Build Linux Packages (RPM / DEB / Tarball)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libgtk-4-dev \
+            libgtk4-layer-shell-dev \
+            libfontconfig1-dev \
+            rpm
+
+      - name: Install Packaging Tools (cargo-deb & cargo-generate-rpm)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-deb,cargo-generate-rpm
+
+      - name: Build Release Binaries
+        run: cargo build --release
+
+      - name: Extract Version
+        id: get_version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "$GITHUB_REF_NAME" ]; then
+            VERSION="0.1.0"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build DEB Package
+        run: |
+          cargo deb -p xtools-host --output target/generate-deb/xtools_${{ steps.get_version.outputs.VERSION }}_amd64.deb
+
+      - name: Build RPM Package
+        run: |
+          cargo generate-rpm -p crates/xtools-host -o target/generate-rpm/xtools-${{ steps.get_version.outputs.VERSION }}-1.x86_64.rpm
+
+      - name: Build Portable Tarball
+        run: |
+          PKG_DIR="xtools-${{ steps.get_version.outputs.VERSION }}-linux-x86_64"
+          mkdir -p "$PKG_DIR"
+          cp target/release/xtools-host "$PKG_DIR/"
+          cp target/release/xtools-time "$PKG_DIR/"
+          cp target/release/xtools-json "$PKG_DIR/"
+          cp target/release/xtools-trans "$PKG_DIR/"
+          cp xtools.desktop "$PKG_DIR/"
+          cp xtools.svg "$PKG_DIR/"
+          cp README.md "$PKG_DIR/"
+          cp LICENSE "$PKG_DIR/"
+          tar -czvf "target/${PKG_DIR}.tar.gz" "$PKG_DIR"
+
+      - name: Generate Checksums
+        run: |
+          cd target
+          mkdir -p artifacts
+          cp generate-deb/*.deb artifacts/ 2>/dev/null || true
+          cp generate-rpm/*.rpm artifacts/ 2>/dev/null || true
+          cp *.tar.gz artifacts/ 2>/dev/null || true
+          cd artifacts
+          sha256sum * > SHA256SUMS.txt
+          ls -la
+
+      - name: Upload Release Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/artifacts/*.deb
+            target/artifacts/*.rpm
+            target/artifacts/*.tar.gz
+            target/artifacts/SHA256SUMS.txt
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
