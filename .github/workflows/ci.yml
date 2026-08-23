@@ -34,7 +34,8 @@ jobs:
             gobject-introspection \
             valac \
             meson \
-            ninja-build
+            ninja-build \
+            xvfb
 
       - name: Install gtk4-layer-shell
         run: |
@@ -56,4 +57,4 @@ jobs:
         run: cargo check --workspace
 
       - name: Test Workspace
-        run: cargo test --workspace
+        run: xvfb-run --auto-servernum cargo test --workspace
