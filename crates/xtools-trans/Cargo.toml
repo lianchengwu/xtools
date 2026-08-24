@@ -11,7 +11,12 @@ serde_json = "1.0.151"
 slint = "1.17.1"
 thiserror = "2.0.20"
 ureq = { version = "3.4.0", features = ["json"] }
+
+[target.'cfg(unix)'.dependencies]
 xtools-ui = { workspace = true, features = ["slint-chrome", "x11-skip-taskbar"] }
+
+[target.'cfg(windows)'.dependencies]
+xtools-ui = { workspace = true, features = ["slint-chrome"] }
 
 [build-dependencies]
 slint-build = "1.17.1"

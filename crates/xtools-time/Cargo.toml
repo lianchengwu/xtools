@@ -8,7 +8,12 @@ rust-version.workspace = true
 [dependencies]
 jiff = "0.2.35"
 slint = "1.17.1"
+
+[target.'cfg(unix)'.dependencies]
 xtools-ui = { workspace = true, features = ["slint-chrome", "x11-skip-taskbar"] }
+
+[target.'cfg(windows)'.dependencies]
+xtools-ui = { workspace = true, features = ["slint-chrome"] }
 
 [build-dependencies]
 slint-build = "1.17.1"

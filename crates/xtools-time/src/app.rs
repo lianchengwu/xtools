@@ -1,10 +1,9 @@
 use std::time::Duration;
 
 use slint::ComponentHandle;
-use xtools_ui::slint_chrome::{
-    WindowDragState, copy_to_clipboard, setup_auto_exit_on_focus_loss_timer, setup_raise_timer,
-    setup_skip_taskbar_timer,
-};
+use xtools_ui::slint_chrome::{WindowDragState, copy_to_clipboard, setup_raise_timer};
+#[cfg(unix)]
+use xtools_ui::slint_chrome::{setup_auto_exit_on_focus_loss_timer, setup_skip_taskbar_timer};
 
 use crate::convert;
 
@@ -14,7 +13,9 @@ pub struct TimeApp {
     ui: TimeWindow,
     _lock: xtools_ui::InstanceListener,
     _raise_timer: slint::Timer,
+    #[cfg(unix)]
     _skip_timer: Option<slint::Timer>,
+    #[cfg(unix)]
     _focus_loss_timer: Option<slint::Timer>,
 }
 
@@ -302,14 +303,19 @@ impl TimeApp {
         }
 
         let raise_timer = setup_raise_timer(lock.try_clone().unwrap(), ui.as_weak());
-        let skip_timer = setup_skip_taskbar_timer();
-        let focus_loss_timer = setup_auto_exit_on_focus_loss_timer();
+        #[cfg(unix)]
+        let (skip_timer, focus_loss_timer) = (
+            setup_skip_taskbar_timer(),
+            setup_auto_exit_on_focus_loss_timer(),
+        );
 
         Ok(Self {
             ui,
             _lock: lock,
             _raise_timer: raise_timer,
+            #[cfg(unix)]
             _skip_timer: Some(skip_timer),
+            #[cfg(unix)]
             _focus_loss_timer: Some(focus_loss_timer),
         })
     }
