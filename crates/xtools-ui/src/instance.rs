@@ -56,6 +56,15 @@ mod tests {
     }
 
     #[test]
+    fn claim_is_exclusive_until_listener_drops() {
+        let name = test_name();
+        let lock = claim_instance(&name).unwrap().expect("should claim instance");
+        assert!(claim_instance(&name).unwrap().is_none());
+        drop(lock);
+        assert!(claim_instance(&name).unwrap().is_some());
+    }
+
+    #[test]
     fn quit_round_trip_is_decoded() {
         let name = test_name();
         let lock = claim_instance(&name).unwrap().expect("should claim instance");
