@@ -23,7 +23,7 @@
 
 - 🌐 **轨道悬浮交互**：常驻屏幕的极简主悬浮球，支持自由拖拽；点击平滑弹出 3 颗环绕功能球（时间戳 / JSON / 翻译），零干扰桌面视线。
 - ⚡ **多进程独立架构**：主程序仅负责悬浮球呈现与调度；各个工具窗口均为独立编译的 Rust 进程，彼此崩溃隔离、资源解耦、随开随走。
-- 🎯 **单例与极速聚焦**：各功能窗口基于 Unix Domain Socket 实现单例机制；再次点击功能球时毫秒级拉起并聚焦已有窗口。
+- 🎯 **单例与极速聚焦**：各功能窗口通过平台原生 IPC（Linux Unix Domain Socket / Windows Named Pipe）实现单例机制；再次启动时毫秒级拉起并聚焦已有窗口。
 - 🎨 **统一度量与暗色主题**：通过 `xtools-ui` 统一 Slint 样式、色彩系统与无边框沉浸式窗口组件，各工具视觉风格高度一致。
 - 🐧 **现代 Linux 桌面原生支持**：支持 Wayland（`gtk4-layer-shell` 协议层）与 X11 混合环境，内置 SNI 规范系统托盘（System Tray）支持。
 
@@ -103,6 +103,14 @@ cargo check --workspace
 # 编译所有二进制（Release 优化）
 cargo build --release
 ```
+
+Windows Phase 1 支持单独构建三个 Slint 工具：
+
+```powershell
+cargo build -p xtools-time -p xtools-json -p xtools-trans --release
+```
+
+Windows Phase 1 不包含 `xtools-host`，因此不提供主悬浮球、系统托盘或相关桌面集成功能。
 
 编译产物位于 `target/release/`：
 - `xtools-host`（主悬浮球与托盘）

@@ -60,3 +60,23 @@ jobs:
 
       - name: Test Workspace
         run: xvfb-run --auto-servernum cargo test --workspace
+
+  windows-tools:
+    name: Test & Build Slint Tools (Windows)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Test Shared UI
+        run: cargo test -p xtools-ui
+
+      - name: Build Slint Tools
+        run: cargo build -p xtools-time -p xtools-json -p xtools-trans --release
