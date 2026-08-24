@@ -16,7 +16,7 @@ pub use boot::{
 };
 pub use ids::{HOST_INSTANCE, JSON_INSTANCE, TIME_INSTANCE, TRANS_INSTANCE, ToolId};
 pub use instance::{
-    InstanceCommand, accept_command, accept_raise, claim_instance, raise_instance,
+    InstanceCommand, InstanceListener, accept_command, accept_raise, claim_instance, raise_instance,
     terminate_instance,
 };
 pub use theme::{
