@@ -16,10 +16,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-
 use xtools_ui::{
     HOST_INSTANCE, SLOP, ToolId, claim_instance, func_radius, main_radius, raise_instance,
-    terminate_instance,
 };
 
 use crate::layout::{Rect, clamp_main, fan_seats, hit_disk, surface_rect, vis_scale};
@@ -501,7 +499,9 @@ fn sibling_bin(name: &str) -> Option<PathBuf> {
 
 fn launch_tool(id: ToolId, _event: Option<&gtk4::gdk::Event>) {
     let desktop = xtools_ui::kwin::current_desktop();
-    let _ = terminate_instance(id.instance_name());
+    if xtools_ui::raise_instance(id.instance_name(), None).unwrap_or(false) {
+        return;
+    }
     let Some(bin) = sibling_bin(id.binary_name()) else {
         eprintln!("xtools-host: missing sibling {}", id.binary_name());
         return;
@@ -516,16 +516,19 @@ fn launch_tool(id: ToolId, _event: Option<&gtk4::gdk::Event>) {
     }
 
     match cmd.spawn() {
-        Ok(child) => {
-            if let Some(desk) = desktop {
-                let pid = child.id();
-                std::thread::spawn(move || {
+        Ok(mut child) => {
+            let pid = child.id();
+            std::thread::spawn(move || {
+                if let Some(desk) = desktop {
                     for _ in 0..12 {
                         std::thread::sleep(Duration::from_millis(80));
                         xtools_ui::kwin::pin_pid(pid, Some(&desk));
                     }
-                });
-            }
+                }
+                // Reap the tool after it exits; otherwise it remains a zombie
+                // child of the long-lived host process.
+                let _ = child.wait();
+            });
         }
         Err(err) => eprintln!("xtools-host: spawn {}: {err}", id.binary_name()),
     }
