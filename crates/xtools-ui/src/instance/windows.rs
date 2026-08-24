@@ -219,9 +219,11 @@ pub fn accept_command(listener: &InstanceListener) -> Option<super::InstanceComm
     }
     unsafe {
         DisconnectNamedPipe(inner.handle);
-        CloseHandle(inner.handle);
     }
-    inner.handle = create_pipe(&inner.pipe_name).ok()?;
+    if let Ok(handle) = create_pipe(&inner.pipe_name) {
+        unsafe { CloseHandle(inner.handle) };
+        inner.handle = handle;
+    }
     let line = std::str::from_utf8(&buf[..read as usize])
         .ok()?
         .lines()
