@@ -13,6 +13,7 @@ if (-not [Environment]::UserInteractive) {
 
 $tools = @('xtools-time', 'xtools-json', 'xtools-trans')
 $started = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
+$bodyError = $null
 
 function Wait-ForExit([System.Diagnostics.Process] $Process, [int] $Milliseconds) {
     if (-not $Process.WaitForExit($Milliseconds)) {
@@ -65,16 +66,34 @@ try {
         Write-Host "$tool singleton smoke test passed"
     }
 }
+catch {
+    $bodyError = $_
+}
 finally {
+    $cleanupErrors = [System.Collections.Generic.List[System.Exception]]::new()
     foreach ($process in $started) {
         try {
             $process.Refresh()
             if (-not $process.HasExited) {
                 $process.Kill()
-                $process.WaitForExit(3000)
+                Wait-ForExit $process 3000
             }
         } catch {
-            Write-Warning "Cleanup failed for process $($process.Id): $($_.Exception.Message)"
+            $cleanupErrors.Add([System.Exception]::new(
+                "Cleanup failed for process $($process.Id): $($_.Exception.Message)",
+                $_.Exception
+            ))
         }
     }
+
+    if ($cleanupErrors.Count -gt 0) {
+        if ($null -ne $bodyError) {
+            $cleanupErrors.Insert(0, $bodyError.Exception)
+        }
+        throw [System.AggregateException]::new('Windows singleton smoke test or process cleanup failed.', $cleanupErrors)
+    }
+}
+
+if ($null -ne $bodyError) {
+    throw $bodyError
 }
