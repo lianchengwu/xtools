@@ -1,4 +1,3 @@
-use std::os::unix::net::UnixListener;
 use std::time::Duration;
 
 use slint::ComponentHandle;
@@ -13,14 +12,14 @@ slint::include_modules!();
 
 pub struct TimeApp {
     ui: TimeWindow,
-    _lock: UnixListener,
+    _lock: xtools_ui::InstanceListener,
     _raise_timer: slint::Timer,
     _skip_timer: Option<slint::Timer>,
     _focus_loss_timer: Option<slint::Timer>,
 }
 
 impl TimeApp {
-    pub fn new(lock: UnixListener) -> Result<Self, slint::PlatformError> {
+    pub fn new(lock: xtools_ui::InstanceListener) -> Result<Self, slint::PlatformError> {
         let ui = TimeWindow::new()?;
 
         let tz_options: Vec<slint::SharedString> = convert::TIMEZONE_OPTIONS

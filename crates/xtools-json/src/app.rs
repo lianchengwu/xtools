@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::os::unix::net::UnixListener;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -34,14 +33,14 @@ fn sync_tree_to_ui(tree: &JsonTree, ui: &JsonWindow) {
 
 pub struct JsonApp {
     ui: JsonWindow,
-    _lock: UnixListener,
+    _lock: xtools_ui::InstanceListener,
     _raise_timer: slint::Timer,
     _skip_timer: slint::Timer,
     _focus_loss_timer: slint::Timer,
 }
 
 impl JsonApp {
-    pub fn new(lock: UnixListener) -> Result<Self, slint::PlatformError> {
+    pub fn new(lock: xtools_ui::InstanceListener) -> Result<Self, slint::PlatformError> {
         let ui = JsonWindow::new()?;
         ui.set_can_copy(false);
         ui.set_view_mode(0);

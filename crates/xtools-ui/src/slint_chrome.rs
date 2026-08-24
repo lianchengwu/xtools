@@ -1,6 +1,5 @@
 //! Shared Slint helpers, theme, and clipboard.
 
-use std::os::unix::net::UnixListener;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -48,7 +47,7 @@ impl WindowDragState {
 
 /// Start a timer that polls the instance lock and handles raise or quit commands.
 pub fn setup_raise_timer(
-    listener: UnixListener,
+    listener: crate::InstanceListener,
     window: slint::Weak<impl slint::ComponentHandle + 'static>,
 ) -> slint::Timer {
     let timer = slint::Timer::default();

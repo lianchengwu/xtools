@@ -1,4 +1,3 @@
-use std::os::unix::net::UnixListener;
 use std::thread;
 use std::time::Duration;
 
@@ -37,14 +36,14 @@ const TARGET: &[(&str, &str)] = &[
 
 pub struct TransApp {
     ui: TransWindow,
-    _lock: UnixListener,
+    _lock: xtools_ui::InstanceListener,
     _raise_timer: slint::Timer,
     _skip_timer: Option<slint::Timer>,
     _focus_loss_timer: Option<slint::Timer>,
 }
 
 impl TransApp {
-    pub fn new(lock: UnixListener) -> Result<Self, slint::PlatformError> {
+    pub fn new(lock: xtools_ui::InstanceListener) -> Result<Self, slint::PlatformError> {
         let ui = TransWindow::new()?;
         ui.set_status_text(format!("引擎：{}", MyMemoryEngine.name()).into());
         ui.set_can_translate(false);
