@@ -36,6 +36,11 @@ impl Drop for Inner {
 
 #[derive(Clone)]
 pub struct InstanceListener(Arc<Mutex<Inner>>);
+impl InstanceListener {
+    pub fn try_clone(&self) -> io::Result<Self> {
+        Ok(self.clone())
+    }
+}
 
 fn current_user() -> io::Result<String> {
     let mut user = [0u16; 257];
