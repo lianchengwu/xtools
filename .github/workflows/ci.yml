@@ -80,3 +80,7 @@ jobs:
 
       - name: Build Slint Tools
         run: cargo build -p xtools-time -p xtools-json -p xtools-trans --release
+
+      - name: Smoke Test Windows Singleton Tools
+        shell: pwsh
+        run: ./scripts/windows-singleton-smoke.ps1 -TargetDir "$env:GITHUB_WORKSPACE/target/release"
