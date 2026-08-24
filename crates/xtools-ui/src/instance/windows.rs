@@ -21,6 +21,8 @@ struct Inner {
     handle: HANDLE,
     mutex: HANDLE,
     pipe_name: Vec<u16>,
+    connected: bool,
+    pending: Vec<u8>,
 }
 
 impl Drop for Inner {
@@ -93,6 +95,8 @@ pub fn claim_instance(name: &str) -> io::Result<Option<InstanceListener>> {
             handle,
             mutex,
             pipe_name,
+            connected: false,
+            pending: Vec::new(),
         }))))),
         Err(err) => {
             unsafe { CloseHandle(mutex) };
@@ -178,15 +182,16 @@ pub fn raise_instance(name: &str, token: Option<&str>) -> io::Result<bool> {
 }
 
 pub fn accept_command(listener: &InstanceListener) -> Option<super::InstanceCommand> {
+    const MAX_COMMAND_SIZE: usize = 4096;
     let mut inner = listener.0.lock().ok()?;
-    if unsafe { ConnectNamedPipe(inner.handle, std::ptr::null_mut()) } == 0 {
-        let code = unsafe { GetLastError() };
-        if code != ERROR_PIPE_CONNECTED {
-            if code == ERROR_PIPE_LISTENING {
+    if !inner.connected {
+        if unsafe { ConnectNamedPipe(inner.handle, std::ptr::null_mut()) } == 0 {
+            let code = unsafe { GetLastError() };
+            if code != ERROR_PIPE_CONNECTED {
                 return None;
             }
-            return None;
         }
+        inner.connected = true;
     }
     let mut available = 0;
     if unsafe {
@@ -199,17 +204,23 @@ pub fn accept_command(listener: &InstanceListener) -> Option<super::InstanceComm
             std::ptr::null_mut(),
         )
     } == 0
-        || available == 0
     {
+        return disconnect(&mut inner);
+    }
+    if available == 0 {
         return None;
     }
-    let mut buf = [0u8; 4096];
+    let remaining = MAX_COMMAND_SIZE.saturating_sub(inner.pending.len());
+    if remaining == 0 {
+        return disconnect(&mut inner);
+    }
+    let mut buf = [0u8; MAX_COMMAND_SIZE];
     let mut read = 0;
     if unsafe {
         ReadFile(
             inner.handle,
             buf.as_mut_ptr(),
-            buf.len() as u32,
+            remaining.min(available as usize) as u32,
             &mut read,
             std::ptr::null_mut(),
         )
@@ -217,27 +228,45 @@ pub fn accept_command(listener: &InstanceListener) -> Option<super::InstanceComm
     {
         return None;
     }
-    unsafe {
-        DisconnectNamedPipe(inner.handle);
-    }
+    inner.pending.extend_from_slice(&buf[..read as usize]);
+    let Some(end) = inner.pending.iter().position(|&byte| byte == b'\n') else {
+        if inner.pending.len() == MAX_COMMAND_SIZE {
+            return disconnect(&mut inner);
+        }
+        return None;
+    };
+    let line = match std::str::from_utf8(&inner.pending[..end]) {
+        Ok(line) => line.trim_end(),
+        Err(_) => return disconnect(&mut inner),
+    };
+    let command = if line == "QUIT" {
+        super::InstanceCommand::Quit
+    } else if line == "RAISE" {
+        super::InstanceCommand::Raise(None)
+    } else {
+        let Some(rest) = line.strip_prefix("RAISE ") else {
+            return disconnect(&mut inner);
+        };
+        if rest.is_empty() || rest.contains(' ') || rest.contains('\0') {
+            return disconnect(&mut inner);
+        }
+        super::InstanceCommand::Raise(Some(rest.to_string()))
+    };
+    reset_connection(&mut inner);
+    Some(command)
+}
+
+fn disconnect(inner: &mut Inner) -> Option<super::InstanceCommand> {
+    reset_connection(inner);
+    None
+}
+
+fn reset_connection(inner: &mut Inner) {
+    unsafe { DisconnectNamedPipe(inner.handle) };
     if let Ok(handle) = create_pipe(&inner.pipe_name) {
         unsafe { CloseHandle(inner.handle) };
         inner.handle = handle;
     }
-    let line = std::str::from_utf8(&buf[..read as usize])
-        .ok()?
-        .lines()
-        .next()?
-        .trim_end();
-    if line == "QUIT" {
-        return Some(super::InstanceCommand::Quit);
-    }
-    if line == "RAISE" {
-        return Some(super::InstanceCommand::Raise(None));
-    }
-    let rest = line.strip_prefix("RAISE ")?;
-    if rest.is_empty() || rest.contains(' ') || rest.contains('\0') {
-        return None;
-    }
-    Some(super::InstanceCommand::Raise(Some(rest.to_string())))
+    inner.connected = false;
+    inner.pending.clear();
 }
