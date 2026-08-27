@@ -53,7 +53,7 @@ try {
         $first.CloseMainWindow() | Out-Null
         if (-not $first.WaitForExit(3000)) {
             $first.Kill()
-            $first.WaitForExit(3000)
+            [void]$first.WaitForExit(3000)
         }
         if (-not $first.HasExited) {
             throw "Could not terminate first $tool process $($first.Id)."

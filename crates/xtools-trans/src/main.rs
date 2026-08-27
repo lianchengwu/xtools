@@ -20,7 +20,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 break;
             }
             Ok(None) => {
-                std::thread::sleep(std::time::Duration::from_millis(10));
+                if let Ok(true) = raise_instance(TRANS_INSTANCE, token.as_deref()) {
+                    return Ok(());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
             }
             Err(err) => {
                 eprintln!("xtools-trans: instance lock failed: {err}");

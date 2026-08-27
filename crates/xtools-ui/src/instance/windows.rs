@@ -2,8 +2,8 @@ use std::io::{self, Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 use windows_sys::Win32::Foundation::{
     CloseHandle, GetLastError, ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS,
-    ERROR_BROKEN_PIPE, ERROR_NO_DATA, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED,
-    ERROR_PIPE_NOT_CONNECTED, HANDLE, INVALID_HANDLE_VALUE,
+    ERROR_BROKEN_PIPE, ERROR_FILE_NOT_FOUND, ERROR_NO_DATA, ERROR_PIPE_BUSY,
+    ERROR_PIPE_CONNECTED, ERROR_PIPE_NOT_CONNECTED, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, ReadFile, WriteFile, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
@@ -95,19 +95,41 @@ pub fn claim_instance(name: &str) -> io::Result<Option<InstanceListener>> {
         unsafe { CloseHandle(mutex) };
         return Ok(None);
     }
-    match create_pipe(&pipe_name) {
-        Ok(handle) => Ok(Some(InstanceListener(Arc::new(Mutex::new(Inner {
-            handle,
-            mutex,
-            pipe_name,
-            connected: false,
-            pending: Vec::new(),
-        }))))),
-        Err(err) => {
-            unsafe { CloseHandle(mutex) };
-            Err(err)
+    // If a previous instance just exited, NPFS may take a moment to finish tearing down the pipe.
+    // Retry briefly while holding the mutex before giving up.
+    let mut last_err = None;
+    for _ in 0..5 {
+        match create_pipe(&pipe_name) {
+            Ok(handle) => {
+                return Ok(Some(InstanceListener(Arc::new(Mutex::new(Inner {
+                    handle,
+                    mutex,
+                    pipe_name,
+                    connected: false,
+                    pending: Vec::new(),
+                })))));
+            }
+            Err(err) => {
+                let code = err.raw_os_error().unwrap_or(0) as u32;
+                if code == ERROR_ACCESS_DENIED || code == ERROR_PIPE_BUSY || code == ERROR_ALREADY_EXISTS {
+                    last_err = Some(err);
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                } else {
+                    unsafe { CloseHandle(mutex) };
+                    return Err(err);
+                }
+            }
         }
     }
+    unsafe { CloseHandle(mutex) };
+    if let Some(err) = last_err {
+        let code = err.raw_os_error().unwrap_or(0) as u32;
+        if code == ERROR_ACCESS_DENIED || code == ERROR_PIPE_BUSY || code == ERROR_ALREADY_EXISTS {
+            return Ok(None);
+        }
+        return Err(err);
+    }
+    Ok(None)
 }
 
 fn connect(name: &[u16]) -> io::Result<Option<HANDLE>> {
@@ -124,7 +146,11 @@ fn connect(name: &[u16]) -> io::Result<Option<HANDLE>> {
     };
     if handle == INVALID_HANDLE_VALUE {
         let code = unsafe { GetLastError() };
-        if code == ERROR_PIPE_BUSY || code == ERROR_ACCESS_DENIED {
+        if code == ERROR_PIPE_BUSY
+            || code == ERROR_ACCESS_DENIED
+            || code == ERROR_FILE_NOT_FOUND
+            || code == ERROR_BROKEN_PIPE
+        {
             Ok(None)
         } else {
             Err(Error::from_raw_os_error(code as i32))
@@ -280,10 +306,6 @@ pub fn accept_command(listener: &InstanceListener) -> Option<super::InstanceComm
 }
 fn reset_connection(inner: &mut Inner) {
     unsafe { DisconnectNamedPipe(inner.handle) };
-    if let Ok(handle) = create_pipe(&inner.pipe_name) {
-        unsafe { CloseHandle(inner.handle) };
-        inner.handle = handle;
-    }
     inner.connected = false;
     inner.pending.clear();
 }
