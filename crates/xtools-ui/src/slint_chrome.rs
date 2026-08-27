@@ -45,6 +45,72 @@ impl WindowDragState {
     }
 }
 
+/// Helper for resizing undecorated Slint windows.
+#[derive(Clone, Default)]
+pub struct WindowResizeState {
+    start_size: Arc<Mutex<Option<slint::PhysicalSize>>>,
+    saved_size: Arc<Mutex<Option<slint::PhysicalSize>>>,
+}
+
+impl WindowResizeState {
+    pub fn new() -> Self {
+        Self {
+            start_size: Arc::new(Mutex::new(None)),
+            saved_size: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    pub fn on_resize_started(&self, window: &slint::Window) {
+        let size = window.size();
+        *self.start_size.lock() = Some(size);
+    }
+
+    pub fn on_resized(&self, window: &slint::Window, dx: f32, dy: f32, min_w: u32, min_h: u32) {
+        if let Some(base_size) = *self.start_size.lock() {
+            let scale = window.scale_factor();
+            let min_phys_w = (min_w as f32 * scale).round() as u32;
+            let min_phys_h = (min_h as f32 * scale).round() as u32;
+            let raw_w = base_size.width as f32 + dx * scale;
+            let raw_h = base_size.height as f32 + dy * scale;
+            let new_w = (raw_w.round() as u32).max(min_phys_w);
+            let new_h = (raw_h.round() as u32).max(min_phys_h);
+            window.set_size(slint::PhysicalSize::new(new_w, new_h));
+        }
+    }
+
+    pub fn toggle_expand(
+        &self,
+        window: &slint::Window,
+        normal_w: u32,
+        normal_h: u32,
+        expanded_w: u32,
+        expanded_h: u32,
+    ) -> bool {
+        let current_size = window.size();
+        let scale = window.scale_factor();
+        let normal_phys_w = (normal_w as f32 * scale).round() as u32;
+        let normal_phys_h = (normal_h as f32 * scale).round() as u32;
+        let expanded_phys_w = (expanded_w as f32 * scale).round() as u32;
+        let expanded_phys_h = (expanded_h as f32 * scale).round() as u32;
+
+        let mut saved = self.saved_size.lock();
+        let tolerance = (20.0 * scale).round() as u32;
+        if current_size.width >= (expanded_phys_w.saturating_sub(tolerance))
+            && current_size.height >= (expanded_phys_h.saturating_sub(tolerance))
+        {
+            let target = saved
+                .take()
+                .unwrap_or(slint::PhysicalSize::new(normal_phys_w, normal_phys_h));
+            window.set_size(target);
+            false
+        } else {
+            *saved = Some(current_size);
+            window.set_size(slint::PhysicalSize::new(expanded_phys_w, expanded_phys_h));
+            true
+        }
+    }
+}
+
 /// Start a timer that polls the instance lock and handles raise or quit commands.
 pub fn setup_raise_timer(
     listener: crate::InstanceListener,
@@ -153,5 +219,13 @@ mod tests {
         let drag = WindowDragState::new();
         drag.on_drag_started(win.window());
         drag.on_dragged(win.window(), 10.0, 20.0);
+
+        let resize = WindowResizeState::new();
+        resize.on_resize_started(win.window());
+        resize.on_resized(win.window(), 50.0, 60.0, 50, 50);
+        let exp = resize.toggle_expand(win.window(), 100, 100, 200, 200);
+        assert!(exp);
+        let restored = resize.toggle_expand(win.window(), 100, 100, 200, 200);
+        assert!(!restored);
     }
 }

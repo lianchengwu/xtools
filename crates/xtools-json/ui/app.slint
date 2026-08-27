@@ -125,13 +125,18 @@ export component JsonWindow inherits Window {
     no-frame: true;
     background: Colors.transparent;
     default-font-family: "sans-serif";
-    width: 580px;
-    height: 600px;
+    min-width: 480px;
+    min-height: 400px;
+    preferred-width: 580px;
+    preferred-height: 600px;
 
     callback close-clicked();
+    callback expand-clicked();
     callback window-drag-started();
     callback window-dragged(length, length);
-
+    callback window-resize-started();
+    callback window-resized(length, length);
+    in property <bool> is-expanded: false;
     in-out property <string> text: "";
     in property <bool> copied: false;
     in property <bool> can-copy: false;
@@ -165,10 +170,15 @@ export component JsonWindow inherits Window {
         ToolShell {
             title: root.title;
             icon: "{ }";
+            resizable: true;
+            show-expand-button: true;
+            is-expanded: root.is-expanded;
             close-clicked => { root.close-clicked(); }
+            expand-clicked => { root.expand-clicked(); }
             window-drag-started => { root.window-drag-started(); }
             window-dragged(dx, dy) => { root.window-dragged(dx, dy); }
-
+            window-resize-started => { root.window-resize-started(); }
+            window-resized(dx, dy) => { root.window-resized(dx, dy); }
             VerticalLayout {
                 spacing: 10px;
                 alignment: stretch;

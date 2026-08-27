@@ -3,7 +3,9 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use slint::{ComponentHandle, ModelRc, VecModel};
-use xtools_ui::slint_chrome::{WindowDragState, copy_to_clipboard, setup_raise_timer};
+use xtools_ui::slint_chrome::{
+    WindowDragState, WindowResizeState, copy_to_clipboard, setup_raise_timer,
+};
 #[cfg(unix)]
 use xtools_ui::slint_chrome::{setup_auto_exit_on_focus_loss_timer, setup_skip_taskbar_timer};
 
@@ -47,8 +49,8 @@ impl JsonApp {
         ui.set_view_mode(0);
 
         let drag_state = WindowDragState::new();
+        let resize_state = WindowResizeState::new();
         let tree_state: Rc<RefCell<Option<JsonTree>>> = Rc::new(RefCell::new(None));
-
         // Window drag callbacks
         {
             let drag = drag_state.clone();
@@ -65,6 +67,35 @@ impl JsonApp {
             ui.on_window_dragged(move |dx, dy| {
                 if let Some(ui) = ui_weak.upgrade() {
                     drag.on_dragged(ui.window(), dx, dy);
+                }
+            });
+        }
+        // Window resize and expand callbacks
+        {
+            let resize = resize_state.clone();
+            let ui_weak = ui.as_weak();
+            ui.on_window_resize_started(move || {
+                if let Some(ui) = ui_weak.upgrade() {
+                    resize.on_resize_started(ui.window());
+                }
+            });
+        }
+        {
+            let resize = resize_state.clone();
+            let ui_weak = ui.as_weak();
+            ui.on_window_resized(move |dx, dy| {
+                if let Some(ui) = ui_weak.upgrade() {
+                    resize.on_resized(ui.window(), dx, dy, 480, 400);
+                }
+            });
+        }
+        {
+            let resize = resize_state;
+            let ui_weak = ui.as_weak();
+            ui.on_expand_clicked(move || {
+                if let Some(ui) = ui_weak.upgrade() {
+                    let is_exp = resize.toggle_expand(ui.window(), 580, 600, 960, 720);
+                    ui.set_is_expanded(is_exp);
                 }
             });
         }

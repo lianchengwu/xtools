@@ -410,9 +410,15 @@ export component DropdownSelector inherits Rectangle {
 export component ToolShell inherits Rectangle {
     in property <string> title;
     in property <string> icon: "";
+    in property <bool> resizable: false;
+    in property <bool> show-expand-button: false;
+    in property <bool> is-expanded: false;
     callback close-clicked();
+    callback expand-clicked();
     callback window-drag-started();
     callback window-dragged(length, length);
+    callback window-resize-started();
+    callback window-resized(length, length);
 
     border-radius: Theme.radius-card;
     border-width: 1px;
@@ -433,7 +439,7 @@ export component ToolShell inherits Rectangle {
             TouchArea {
                 x: 0px;
                 y: 0px;
-                width: parent.width - 44px;
+                width: parent.width - (root.show-expand-button ? 74px : 44px);
                 height: parent.height;
                 pointer-event(event) => {
                     if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
@@ -449,7 +455,7 @@ export component ToolShell inherits Rectangle {
             HorizontalLayout {
                 x: 18px;
                 y: 0px;
-                width: parent.width - 64px;
+                width: parent.width - (root.show-expand-button ? 96px : 64px);
                 height: parent.height;
                 spacing: 8px;
                 alignment: start;
@@ -466,6 +472,35 @@ export component ToolShell inherits Rectangle {
                     font-weight: 600;
                     color: Theme.foreground;
                     vertical-alignment: center;
+                }
+            }
+
+            // Expand / Maximize button (optional)
+            if root.show-expand-button : Rectangle {
+                x: parent.width - 66px;
+                y: (parent.height - 26px) / 2;
+                width: 26px;
+                height: 26px;
+                border-radius: 13px;
+                background: expand-touch.pressed
+                    ? #E2E8F0
+                    : (expand-touch.has-hover ? #F1F5F9 : Colors.transparent);
+
+                animate background { duration: 100ms; }
+
+                Text {
+                    text: root.is-expanded ? "⤡" : "⤢";
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: expand-touch.has-hover ? #0F172A : #64748B;
+                    vertical-alignment: center;
+                    horizontal-alignment: center;
+                }
+
+                expand-touch := TouchArea {
+                    clicked => {
+                        root.expand-clicked();
+                    }
                 }
             }
 
@@ -518,6 +553,90 @@ export component ToolShell inherits Rectangle {
             vertical-stretch: 1;
 
             @children
+        }
+    }
+
+    // Right edge resize handle
+    if root.resizable : TouchArea {
+        x: parent.width - 8px;
+        y: Theme.titlebar-height;
+        width: 8px;
+        height: parent.height - Theme.titlebar-height - 14px;
+        mouse-cursor: ew-resize;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                root.window-resize-started();
+            }
+        }
+        moved => {
+            root.window-resized(self.mouse-x - self.pressed-x, 0px);
+        }
+    }
+
+    // Bottom edge resize handle
+    if root.resizable : TouchArea {
+        x: 0px;
+        y: parent.height - 8px;
+        width: parent.width - 14px;
+        height: 8px;
+        mouse-cursor: ns-resize;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                root.window-resize-started();
+            }
+        }
+        moved => {
+            root.window-resized(0px, self.mouse-y - self.pressed-y);
+        }
+    }
+
+    // Bottom-right corner resize handle
+    if root.resizable : TouchArea {
+        x: parent.width - 18px;
+        y: parent.height - 18px;
+        width: 18px;
+        height: 18px;
+        mouse-cursor: nwse-resize;
+        pointer-event(event) => {
+            if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                root.window-resize-started();
+            }
+        }
+        moved => {
+            root.window-resized(self.mouse-x - self.pressed-x, self.mouse-y - self.pressed-y);
+        }
+    }
+
+    // Visual grip dots in bottom-right corner
+    if root.resizable : Rectangle {
+        x: parent.width - 12px;
+        y: parent.height - 12px;
+        width: 8px;
+        height: 8px;
+
+        Rectangle {
+            x: 5px;
+            y: 5px;
+            width: 2px;
+            height: 2px;
+            border-radius: 1px;
+            background: #94A3B8;
+        }
+        Rectangle {
+            x: 1px;
+            y: 5px;
+            width: 2px;
+            height: 2px;
+            border-radius: 1px;
+            background: #94A3B8;
+        }
+        Rectangle {
+            x: 5px;
+            y: 1px;
+            width: 2px;
+            height: 2px;
+            border-radius: 1px;
+            background: #94A3B8;
         }
     }
 }
