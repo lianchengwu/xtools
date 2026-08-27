@@ -1,7 +1,7 @@
 use std::io::{self, Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 use windows_sys::Win32::Foundation::{
-    CloseHandle, GetLastError, ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS,
+    CloseHandle, GetLastError, SetLastError, ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS,
     ERROR_BROKEN_PIPE, ERROR_FILE_NOT_FOUND, ERROR_NO_DATA, ERROR_PIPE_BUSY,
     ERROR_PIPE_CONNECTED, ERROR_PIPE_NOT_CONNECTED, HANDLE, INVALID_HANDLE_VALUE,
 };
@@ -87,6 +87,7 @@ pub fn claim_instance(name: &str) -> io::Result<Option<InstanceListener>> {
     let endpoint = endpoint_name(name)?;
     let pipe_name = pipe_name(&endpoint);
     let mutex_name = wide(&format!(r"Local\xtools-{endpoint}-instance"));
+    unsafe { SetLastError(0) };
     let mutex = unsafe { CreateMutexW(std::ptr::null(), 0, mutex_name.as_ptr()) };
     if mutex.is_null() {
         return Err(Error::last_os_error());
@@ -97,8 +98,7 @@ pub fn claim_instance(name: &str) -> io::Result<Option<InstanceListener>> {
     }
     // If a previous instance just exited, NPFS may take a moment to finish tearing down the pipe.
     // Retry briefly while holding the mutex before giving up.
-    let mut last_err = None;
-    for _ in 0..5 {
+    for _ in 0..10 {
         match create_pipe(&pipe_name) {
             Ok(handle) => {
                 return Ok(Some(InstanceListener(Arc::new(Mutex::new(Inner {
@@ -109,26 +109,12 @@ pub fn claim_instance(name: &str) -> io::Result<Option<InstanceListener>> {
                     pending: Vec::new(),
                 })))));
             }
-            Err(err) => {
-                let code = err.raw_os_error().unwrap_or(0) as u32;
-                if code == ERROR_ACCESS_DENIED || code == ERROR_PIPE_BUSY || code == ERROR_ALREADY_EXISTS {
-                    last_err = Some(err);
-                    std::thread::sleep(std::time::Duration::from_millis(10));
-                } else {
-                    unsafe { CloseHandle(mutex) };
-                    return Err(err);
-                }
+            Err(_) => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
             }
         }
     }
     unsafe { CloseHandle(mutex) };
-    if let Some(err) = last_err {
-        let code = err.raw_os_error().unwrap_or(0) as u32;
-        if code == ERROR_ACCESS_DENIED || code == ERROR_PIPE_BUSY || code == ERROR_ALREADY_EXISTS {
-            return Ok(None);
-        }
-        return Err(err);
-    }
     Ok(None)
 }
 

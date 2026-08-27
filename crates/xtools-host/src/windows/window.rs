@@ -621,16 +621,28 @@ unsafe extern "system" fn window_proc(
 }
 
 pub fn run() {
-    let instance = match claim_instance(HOST_INSTANCE) {
-        Ok(Some(listener)) => listener,
-        Ok(None) => {
-            let _ = raise_instance(HOST_INSTANCE, None);
-            return;
+    let mut lock = None;
+    for _ in 0..15 {
+        match claim_instance(HOST_INSTANCE) {
+            Ok(Some(listener)) => {
+                lock = Some(listener);
+                break;
+            }
+            Ok(None) => {
+                if let Ok(true) = raise_instance(HOST_INSTANCE, None) {
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            Err(err) => {
+                eprintln!("xtools-host: instance lock attempt: {err}");
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
         }
-        Err(err) => {
-            eprintln!("xtools-host: instance lock failed: {err}");
-            std::process::exit(1);
-        }
+    }
+    let Some(instance) = lock else {
+        let _ = raise_instance(HOST_INSTANCE, None);
+        return;
     };
 
     let class_name: Vec<u16> = "XToolsHostWindow\0".encode_utf16().collect();

@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     prefer_x11_for_skip_taskbar();
     let token = take_activation_token();
     let mut lock = None;
-    for _ in 0..10 {
+    for _ in 0..15 {
         match claim_instance(JSON_INSTANCE) {
             Ok(Some(l)) => {
                 lock = Some(l);
@@ -26,8 +26,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::thread::sleep(std::time::Duration::from_millis(20));
             }
             Err(err) => {
-                eprintln!("xtools-json: instance lock failed: {err}");
-                std::process::exit(1);
+                eprintln!("xtools-json: instance lock attempt: {err}");
+                std::thread::sleep(std::time::Duration::from_millis(20));
             }
         }
     }
