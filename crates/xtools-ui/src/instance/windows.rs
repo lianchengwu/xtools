@@ -2,16 +2,15 @@ use std::io::{self, Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 use windows_sys::Win32::Foundation::{
     CloseHandle, GetLastError, ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS,
-    ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, ERROR_PIPE_LISTENING, HANDLE,
-    INVALID_HANDLE_VALUE,
+    ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
-    CreateFileW, FILE_GENERIC_READ, FILE_GENERIC_WRITE, OPEN_EXISTING,
+    CreateFileW, ReadFile, WriteFile, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
+    OPEN_EXISTING, PIPE_ACCESS_DUPLEX,
 };
-use windows_sys::Win32::System::IO::{ReadFile, WriteFile};
 use windows_sys::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PeekNamedPipe,
-    PIPE_ACCESS_DUPLEX, PIPE_NOWAIT, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS,
+    PIPE_NOWAIT, PIPE_READMODE_BYTE, PIPE_REJECT_REMOTE_CLIENTS,
     PIPE_TYPE_BYTE, PIPE_UNLIMITED_INSTANCES,
 };
 use windows_sys::Win32::System::Threading::CreateMutexW;
@@ -88,7 +87,7 @@ pub fn claim_instance(name: &str) -> io::Result<Option<InstanceListener>> {
     let pipe_name = pipe_name(&endpoint);
     let mutex_name = wide(&format!(r"Local\xtools-{endpoint}-instance"));
     let mutex = unsafe { CreateMutexW(std::ptr::null(), 0, mutex_name.as_ptr()) };
-    if mutex == 0 {
+    if mutex.is_null() {
         return Err(Error::last_os_error());
     }
     if unsafe { GetLastError() } == ERROR_ALREADY_EXISTS {
@@ -119,7 +118,7 @@ fn connect(name: &[u16]) -> io::Result<Option<HANDLE>> {
             std::ptr::null(),
             OPEN_EXISTING,
             0,
-            0,
+            std::ptr::null_mut(),
         )
     };
     if handle == INVALID_HANDLE_VALUE {
@@ -148,7 +147,7 @@ fn send(name: &str, bytes: &[u8]) -> io::Result<bool> {
                 bytes[offset..].as_ptr(),
                 (bytes.len() - offset) as u32,
                 &mut written,
-                std::ptr::null(),
+                std::ptr::null_mut(),
             )
         };
         if result == 0 {

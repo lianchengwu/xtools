@@ -1,4 +1,4 @@
-use std::env;
+
 use std::sync::OnceLock;
 
 static TARGET_DESKTOP: OnceLock<Option<String>> = OnceLock::new();
@@ -7,7 +7,7 @@ static TARGET_DESKTOP: OnceLock<Option<String>> = OnceLock::new();
 #[cfg(unix)]
 pub fn capture_target_desktop() {
     TARGET_DESKTOP.get_or_init(|| {
-        env::var("XTOOLS_TARGET_DESKTOP")
+        std::env::var("XTOOLS_TARGET_DESKTOP")
             .ok()
             .filter(|s| !s.is_empty())
             .or_else(crate::kwin::current_desktop)
@@ -26,12 +26,12 @@ pub fn target_desktop() -> Option<String> {
 
 #[cfg(unix)]
 pub fn take_activation_token() -> Option<String> {
-    let token = env::var("XDG_ACTIVATION_TOKEN")
+    let token = std::env::var("XDG_ACTIVATION_TOKEN")
         .ok()
         .filter(|s| !s.is_empty());
     unsafe {
-        env::remove_var("XDG_ACTIVATION_TOKEN");
-        env::remove_var("DESKTOP_STARTUP_ID");
+        std::env::remove_var("XDG_ACTIVATION_TOKEN");
+        std::env::remove_var("DESKTOP_STARTUP_ID");
     }
     token
 }
@@ -43,9 +43,9 @@ pub fn take_activation_token() -> Option<String> {
 
 #[cfg(unix)]
 pub fn prefer_x11_for_skip_taskbar() {
-    if env::var_os("DISPLAY").is_some() {
+    if std::env::var_os("DISPLAY").is_some() {
         unsafe {
-            env::remove_var("WAYLAND_DISPLAY");
+            std::env::remove_var("WAYLAND_DISPLAY");
         }
     }
 }
