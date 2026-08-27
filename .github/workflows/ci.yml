@@ -62,7 +62,7 @@ jobs:
         run: xvfb-run --auto-servernum cargo test --workspace
 
   windows-tools:
-    name: Test & Build Slint Tools (Windows)
+    name: Test & Build Tools & Host (Windows)
     runs-on: windows-latest
 
     steps:
@@ -75,12 +75,11 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
 
-      - name: Test Shared UI
-        run: cargo test -p xtools-ui
+      - name: Test Shared UI & Host
+        run: cargo test -p xtools-ui -p xtools-host
 
-      - name: Build Slint Tools
-        run: cargo build -p xtools-time -p xtools-json -p xtools-trans --release
-
+      - name: Build All Binaries
+        run: cargo build --workspace --release
       - name: Smoke Test Windows Singleton Tools
         shell: pwsh
         run: ./scripts/windows-singleton-smoke.ps1 -TargetDir "$env:GITHUB_WORKSPACE/target/release"

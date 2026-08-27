@@ -1,3 +1,4 @@
+#[cfg(unix)]
 use gtk4::gdk;
 use xtools_ui::{GAP, ToolId, func_radius, main_radius, orbit_radius};
 
@@ -10,6 +11,11 @@ pub struct Rect {
 }
 
 impl Rect {
+    pub fn new(x: f64, y: f64, w: f64, h: f64) -> Self {
+        Self { x, y, w, h }
+    }
+
+    #[cfg(unix)]
     #[allow(dead_code)]
     pub fn from_monitor(geo: &gdk::Rectangle) -> Self {
         Self {

@@ -37,7 +37,20 @@ assets = [
 ]
 
 [dependencies]
+xtools-ui = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
 gtk4 = { version = "0.11.4", features = ["v4_12"] }
 gtk4-layer-shell = { version = "0.8.1", features = ["v1_3"] }
 ksni = { version = "0.3.6", default-features = false, features = ["async-io", "blocking"] }
-xtools-ui = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Shell",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Threading",
+] }

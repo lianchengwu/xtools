@@ -6712,6 +6712,7 @@ dependencies = [
  "gtk4",
  "gtk4-layer-shell",
  "ksni",
+ "windows-sys 0.61.2",
  "xtools-ui",
 ]
 

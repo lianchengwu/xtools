@@ -11,7 +11,7 @@ if (-not [Environment]::UserInteractive) {
     throw 'Windows singleton smoke test requires an interactive desktop session (the GitHub Windows runner provides one).'
 }
 
-$tools = @('xtools-time', 'xtools-json', 'xtools-trans')
+$tools = @('xtools-time', 'xtools-json', 'xtools-trans', 'xtools-host')
 $started = [System.Collections.Generic.List[System.Diagnostics.Process]]::new()
 $bodyError = $null
 
