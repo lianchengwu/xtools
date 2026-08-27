@@ -2,7 +2,8 @@ use std::io::{self, Error, ErrorKind};
 use std::sync::{Arc, Mutex};
 use windows_sys::Win32::Foundation::{
     CloseHandle, GetLastError, ERROR_ACCESS_DENIED, ERROR_ALREADY_EXISTS,
-    ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, HANDLE, INVALID_HANDLE_VALUE,
+    ERROR_BROKEN_PIPE, ERROR_NO_DATA, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED,
+    ERROR_PIPE_NOT_CONNECTED, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows_sys::Win32::Storage::FileSystem::{
     CreateFileW, ReadFile, WriteFile, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
@@ -188,17 +189,21 @@ pub fn raise_instance(name: &str, token: Option<&str>) -> io::Result<bool> {
 pub fn accept_command(listener: &InstanceListener) -> Option<super::InstanceCommand> {
     const MAX_COMMAND_SIZE: usize = 4096;
     let mut inner = listener.0.lock().ok()?;
+
+    // Try connecting to a client if not marked connected
     if !inner.connected {
         if unsafe { ConnectNamedPipe(inner.handle, std::ptr::null_mut()) } == 0 {
             let code = unsafe { GetLastError() };
-            if code != ERROR_PIPE_CONNECTED {
-                return None;
+            if code == ERROR_PIPE_CONNECTED || code == ERROR_NO_DATA {
+                inner.connected = true;
             }
+        } else {
+            inner.connected = true;
         }
-        inner.connected = true;
     }
+
     let mut available = 0;
-    if unsafe {
+    let peek_ok = unsafe {
         PeekNamedPipe(
             inner.handle,
             std::ptr::null_mut(),
@@ -207,64 +212,72 @@ pub fn accept_command(listener: &InstanceListener) -> Option<super::InstanceComm
             &mut available,
             std::ptr::null_mut(),
         )
-    } == 0
-    {
-        return disconnect(&mut inner);
-    }
-    if available == 0 {
-        return None;
-    }
-    let remaining = MAX_COMMAND_SIZE.saturating_sub(inner.pending.len());
-    if remaining == 0 {
-        return disconnect(&mut inner);
-    }
-    let mut buf = [0u8; MAX_COMMAND_SIZE];
-    let mut read = 0;
-    if unsafe {
-        ReadFile(
-            inner.handle,
-            buf.as_mut_ptr(),
-            remaining.min(available as usize) as u32,
-            &mut read,
-            std::ptr::null_mut(),
-        )
-    } == 0
-    {
-        return None;
-    }
-    inner.pending.extend_from_slice(&buf[..read as usize]);
-    let Some(end) = inner.pending.iter().position(|&byte| byte == b'\n') else {
-        if inner.pending.len() == MAX_COMMAND_SIZE {
-            return disconnect(&mut inner);
-        }
-        return None;
     };
-    let line = match std::str::from_utf8(&inner.pending[..end]) {
-        Ok(line) => line.trim_end(),
-        Err(_) => return disconnect(&mut inner),
-    };
-    let command = if line == "QUIT" {
-        super::InstanceCommand::Quit
-    } else if line == "RAISE" {
-        super::InstanceCommand::Raise(None)
-    } else {
-        let Some(rest) = line.strip_prefix("RAISE ") else {
-            return disconnect(&mut inner);
-        };
-        if rest.is_empty() || rest.contains(' ') || rest.contains('\0') {
-            return disconnect(&mut inner);
-        }
-        super::InstanceCommand::Raise(Some(rest.to_string()))
-    };
-    reset_connection(&mut inner);
-    Some(command)
-}
 
-fn disconnect(inner: &mut Inner) -> Option<super::InstanceCommand> {
-    reset_connection(inner);
+    if peek_ok != 0 && available > 0 {
+        inner.connected = true;
+        let remaining = MAX_COMMAND_SIZE.saturating_sub(inner.pending.len());
+        let mut buf = [0u8; MAX_COMMAND_SIZE];
+        let mut read = 0;
+        let read_ok = unsafe {
+            ReadFile(
+                inner.handle,
+                buf.as_mut_ptr(),
+                remaining.min(available as usize) as u32,
+                &mut read,
+                std::ptr::null_mut(),
+            )
+        };
+        if read_ok != 0 && read > 0 {
+            inner.pending.extend_from_slice(&buf[..read as usize]);
+        }
+    } else if peek_ok == 0 {
+        let code = unsafe { GetLastError() };
+        if inner.connected
+            && (code == ERROR_BROKEN_PIPE
+                || code == ERROR_PIPE_NOT_CONNECTED
+                || code == ERROR_NO_DATA)
+        {
+            if inner.pending.is_empty() {
+                reset_connection(&mut inner);
+                return None;
+            }
+        }
+    }
+
+    if let Some(end) = inner.pending.iter().position(|&byte| byte == b'\n') {
+        let line = match std::str::from_utf8(&inner.pending[..end]) {
+            Ok(line) => line.trim_end().to_string(),
+            Err(_) => {
+                reset_connection(&mut inner);
+                return None;
+            }
+        };
+        let command = if line == "QUIT" {
+            super::InstanceCommand::Quit
+        } else if line == "RAISE" {
+            super::InstanceCommand::Raise(None)
+        } else if let Some(rest) = line.strip_prefix("RAISE ") {
+            if rest.is_empty() || rest.contains(' ') || rest.contains('\0') {
+                reset_connection(&mut inner);
+                return None;
+            }
+            super::InstanceCommand::Raise(Some(rest.to_string()))
+        } else {
+            reset_connection(&mut inner);
+            return None;
+        };
+        reset_connection(&mut inner);
+        return Some(command);
+    }
+
+    if inner.pending.len() >= MAX_COMMAND_SIZE {
+        reset_connection(&mut inner);
+        return None;
+    }
+
     None
 }
-
 fn reset_connection(inner: &mut Inner) {
     unsafe { DisconnectNamedPipe(inner.handle) };
     if let Ok(handle) = create_pipe(&inner.pipe_name) {
