@@ -19,7 +19,7 @@ component JsonRow inherits Rectangle {
 
     height: 24px;
     border-radius: 4px;
-    background: touch.has-hover ? #F1F5F9 : Colors.transparent;
+    background: touch.has-hover ? Theme.secondary-hover : Colors.transparent;
 
     touch := TouchArea {
         clicked => {
@@ -40,12 +40,12 @@ component JsonRow inherits Rectangle {
             width: 18px;
             height: 18px;
             border-radius: 3px;
-            background: btn-touch.has-hover ? #E2E8F0 : Colors.transparent;
+            background: btn-touch.has-hover ? Theme.secondary-hover : Colors.transparent;
 
             Text {
                 text: root.item.is-expanded ? "▼" : "▶";
                 font-size: 10px;
-                color: #64748B;
+                color: Theme.muted;
                 vertical-alignment: center;
                 horizontal-alignment: center;
             }
@@ -68,7 +68,7 @@ component JsonRow inherits Rectangle {
             font-family: Theme.font-mono;
             font-size: 13px;
             font-weight: 600;
-            color: #1E40AF;
+            color: Theme.syntax-key;
             vertical-alignment: center;
         }
 
@@ -77,11 +77,11 @@ component JsonRow inherits Rectangle {
             text: root.item.value-text;
             font-family: Theme.font-mono;
             font-size: 13px;
-            color: root.item.node-type == "string" ? #059669
-                 : root.item.node-type == "number" ? #D97706
-                 : root.item.node-type == "boolean" ? #EA580C
-                 : root.item.node-type == "null" ? #94A3B8
-                 : #334155;
+            color: root.item.node-type == "string" ? Theme.syntax-string
+                 : root.item.node-type == "number" ? Theme.syntax-number
+                 : root.item.node-type == "boolean" ? Theme.syntax-boolean
+                 : root.item.node-type == "null" ? Theme.syntax-null
+                 : Theme.syntax-text;
             font-italic: root.item.node-type == "null";
             vertical-alignment: center;
         }
@@ -90,9 +90,9 @@ component JsonRow inherits Rectangle {
         if !root.item.is-expanded && root.item.is-expandable : Rectangle {
             height: 18px;
             border-radius: 4px;
-            background: #F1F5F9;
+            background: Theme.secondary;
             border-width: 1px;
-            border-color: #CBD5E1;
+            border-color: Theme.border-hover;
 
             HorizontalLayout {
                 padding-left: 6px;
@@ -103,7 +103,7 @@ component JsonRow inherits Rectangle {
                     text: root.item.summary-text;
                     font-size: 11px;
                     font-weight: 500;
-                    color: #475569;
+                    color: Theme.foreground-soft;
                     vertical-alignment: center;
                 }
             }
@@ -114,7 +114,7 @@ component JsonRow inherits Rectangle {
             text: ",";
             font-family: Theme.font-mono;
             font-size: 13px;
-            color: #64748B;
+            color: Theme.muted;
             vertical-alignment: center;
         }
     }
@@ -191,7 +191,7 @@ export component JsonWindow inherits Window {
                     // Mode switch tabs
                     Rectangle {
                         border-radius: Theme.radius-control;
-                        background: #E2E8F0;
+                        background: Theme.secondary-hover;
                         height: 32px;
 
                         HorizontalLayout {
@@ -200,7 +200,7 @@ export component JsonWindow inherits Window {
                             // Text mode
                             Rectangle {
                                 border-radius: Theme.radius-control - 2px;
-                                background: root.view-mode == 0 ? #FFFFFF : Colors.transparent;
+                                background: root.view-mode == 0 ? Theme.card-bg : Colors.transparent;
 
                                 HorizontalLayout {
                                     padding-left: 10px;
@@ -224,7 +224,7 @@ export component JsonWindow inherits Window {
                             // Tree fold mode
                             Rectangle {
                                 border-radius: Theme.radius-control - 2px;
-                                background: root.view-mode == 1 ? #FFFFFF : Colors.transparent;
+                                background: root.view-mode == 1 ? Theme.card-bg : Colors.transparent;
 
                                 HorizontalLayout {
                                     padding-left: 10px;

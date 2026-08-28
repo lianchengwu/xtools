@@ -5,12 +5,6 @@ use std::time::Duration;
 
 use parking_lot::Mutex;
 
-pub const THEME_BG: &str = "#F5F5F7";
-pub const THEME_FG: &str = "#1C1E26";
-pub const THEME_HAIRLINE: &str = "#D8D8DF";
-pub const THEME_MUTED: &str = "#6E6E78";
-pub const THEME_DESTRUCTIVE: &str = "#DC2626";
-
 /// Copy text to system clipboard.
 pub fn copy_to_clipboard(text: &str) {
     if let Ok(mut clipboard) = arboard::Clipboard::new() {

@@ -1,34 +1,56 @@
+import { Palette } from "std-widgets.slint";
+
+// Single source of truth for the three tool windows.
+// Colors follow the system light/dark preference via Palette.color-scheme
+// (winit keeps it live). Every color used by tool UIs must come from here —
+// no hex literals in app or component files.
 export global Theme {
+    out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+
     // Surfaces & Canvas
-    out property <color> background: #F8FAFC;
-    out property <color> card-bg: #FFFFFF;
-    out property <color> foreground: #0F172A;
-    out property <color> secondary: #F1F5F9;
-    out property <color> secondary-hover: #E2E8F0;
-    out property <color> secondary-active: #CBD5E1;
-    out property <color> muted: #64748B;
-    out property <color> border: #E2E8F0;
-    out property <color> border-subtle: #F1F5F9;
-    out property <color> border-hover: #CBD5E1;
+    out property <color> background: dark ? #0F172A : #F8FAFC;
+    out property <color> card-bg: dark ? #1E293B : #FFFFFF;
+    out property <color> foreground: dark ? #E2E8F0 : #0F172A;
+    // Foreground one step softer (secondary text, icon hover)
+    out property <color> foreground-soft: dark ? #CBD5E1 : #475569;
+    out property <color> secondary: dark ? #1E293B : #F1F5F9;
+    out property <color> secondary-hover: dark ? #334155 : #E2E8F0;
+    out property <color> secondary-active: dark ? #475569 : #CBD5E1;
+    out property <color> muted: dark ? #94A3B8 : #64748B;
+    out property <color> border: dark ? #334155 : #E2E8F0;
+    out property <color> border-subtle: dark ? #1E293B : #F1F5F9;
+    out property <color> border-hover: dark ? #475569 : #CBD5E1;
 
     // Brand & Primary Accents
-    out property <color> primary: #2563EB;
-    out property <color> primary-hover: #1D4ED8;
-    out property <color> primary-active: #1E40AF;
+    out property <color> primary: dark ? #3B82F6 : #2563EB;
+    out property <color> primary-hover: dark ? #60A5FA : #1D4ED8;
+    out property <color> primary-active: dark ? #2563EB : #1E40AF;
     out property <color> primary-fg: #FFFFFF;
-    out property <color> primary-glow: #2563EB26;
-    out property <color> selection: #BFDBFE;
+    out property <color> primary-disabled: dark ? #1E40AF : #93C5FD;
+    out property <color> primary-glow: dark ? #3B82F640 : #2563EB26;
+    out property <color> selection: dark ? #1D4ED8 : #BFDBFE;
 
     // Success / Copied
-    out property <color> success: #059669;
-    out property <color> success-hover: #047857;
-    out property <color> success-bg: #ECFDF5;
-    out property <color> success-border: #A7F3D0;
+    out property <color> success: dark ? #34D399 : #059669;
+    out property <color> success-hover: dark ? #6EE7B7 : #047857;
+    out property <color> success-bg: dark ? #022C22 : #ECFDF5;
+    out property <color> success-border: dark ? #065F46 : #A7F3D0;
 
     // Errors & Warnings
-    out property <color> error-fg: #DC2626;
-    out property <color> error-bg: #FEF2F2;
-    out property <color> error-border: #FECACA;
+    out property <color> error-fg: dark ? #F87171 : #DC2626;
+    out property <color> error-bg: dark ? #450A0A : #FEF2F2;
+    out property <color> error-border: dark ? #7F1D1D : #FECACA;
+
+    // JSON syntax highlighting (see xtools-json tree view)
+    out property <color> syntax-key: dark ? #93C5FD : #1E40AF;
+    out property <color> syntax-string: dark ? #34D399 : #059669;
+    out property <color> syntax-number: dark ? #FBBF24 : #D97706;
+    out property <color> syntax-boolean: dark ? #FB923C : #EA580C;
+    out property <color> syntax-null: dark ? #64748B : #94A3B8;
+    out property <color> syntax-text: dark ? #CBD5E1 : #334155;
+
+    // Drop shadow for popups (stronger in dark to stay visible)
+    out property <color> drop-shadow: dark ? #00000066 : #0000001E;
 
     // Typography
     out property <length> font-size-title: 15px;

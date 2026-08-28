@@ -15,7 +15,7 @@ export component ActionButton inherits Rectangle {
     border-width: root.is-primary ? 0px : 1px;
     border-color: !root.enabled ? Theme.border-subtle : (touch.has-hover ? Theme.border-hover : Theme.border);
     background: !root.enabled 
-        ? (root.is-primary ? #93C5FD : #F8FAFC)
+        ? (root.is-primary ? Theme.primary-disabled : Theme.background)
         : (root.is-primary 
             ? (touch.pressed ? Theme.primary-active : (touch.has-hover ? Theme.primary-hover : Theme.primary))
             : (touch.pressed ? Theme.secondary-active : (touch.has-hover ? Theme.secondary-hover : Theme.secondary)));
@@ -32,7 +32,7 @@ export component ActionButton inherits Rectangle {
             font-size: Theme.font-size-body;
             font-weight: root.is-primary ? 600 : 500;
             color: !root.enabled 
-                ? (root.is-primary ? #FFFFFF : Theme.muted)
+                ? (root.is-primary ? Theme.primary-fg : Theme.muted)
                 : (root.is-primary ? Theme.primary-fg : Theme.foreground);
             vertical-alignment: center;
             horizontal-alignment: center;
@@ -60,7 +60,7 @@ export component CopyButton inherits Rectangle {
         : (!root.enabled ? Theme.border-subtle : (touch.has-hover ? Theme.border-hover : Theme.border));
     background: root.copied 
         ? Theme.success-bg 
-        : (!root.enabled ? #F8FAFC : (touch.pressed ? Theme.secondary-active : (touch.has-hover ? Theme.secondary-hover : Theme.secondary)));
+        : (!root.enabled ? Theme.background : (touch.pressed ? Theme.secondary-active : (touch.has-hover ? Theme.secondary-hover : Theme.secondary)));
 
     animate background { duration: 120ms; }
     animate border-color { duration: 120ms; }
@@ -105,7 +105,7 @@ export component IconButton inherits Rectangle {
     border-radius: Theme.radius-control;
     border-width: 1px;
     border-color: !root.enabled ? Theme.border-subtle : (touch.has-hover ? Theme.border-hover : Theme.border);
-    background: !root.enabled ? #F8FAFC : (touch.pressed ? Theme.secondary-active : (touch.has-hover ? Theme.secondary-hover : Theme.secondary));
+    background: !root.enabled ? Theme.background : (touch.pressed ? Theme.secondary-active : (touch.has-hover ? Theme.secondary-hover : Theme.secondary));
 
     animate background { duration: 100ms; }
     animate border-color { duration: 100ms; }
@@ -306,7 +306,7 @@ export component DropdownPopup inherits Rectangle {
     border-color: Theme.border;
     background: Theme.card-bg;
     drop-shadow-blur: 16px;
-    drop-shadow-color: #0000001E;
+    drop-shadow-color: Theme.drop-shadow;
     drop-shadow-offset-y: 4px;
     height: min(260px, max(68px, root.options.length * 32px + 10px));
     ScrollView {
@@ -493,8 +493,8 @@ export component ToolShell inherits Rectangle {
                 height: 26px;
                 border-radius: 13px;
                 background: expand-touch.pressed
-                    ? #E2E8F0
-                    : (expand-touch.has-hover ? #F1F5F9 : Colors.transparent);
+                    ? Theme.secondary-hover
+                    : (expand-touch.has-hover ? Theme.secondary : Colors.transparent);
 
                 animate background { duration: 100ms; }
 
@@ -506,7 +506,7 @@ export component ToolShell inherits Rectangle {
                     commands: root.is-expanded
                         ? "M 1 4 L 4 4 L 4 1 M 9 6 L 6 6 L 6 9 M 4 4 L 1 1 M 6 6 L 9 9"
                         : "M 4 1 L 1 1 L 1 4 M 6 9 L 9 9 L 9 6 M 1 1 L 4 4 M 9 9 L 6 6";
-                    stroke: expand-touch.has-hover ? #0F172A : #64748B;
+                    stroke: expand-touch.has-hover ? Theme.foreground : Theme.muted;
                     stroke-width: 1.2px;
                 }
 
@@ -525,8 +525,8 @@ export component ToolShell inherits Rectangle {
                 height: 26px;
                 border-radius: 13px;
                 background: close-touch.pressed 
-                    ? #FEE2E2 
-                    : (close-touch.has-hover ? #F1F5F9 : Colors.transparent);
+                    ? Theme.error-border
+                    : (close-touch.has-hover ? Theme.secondary : Colors.transparent);
 
                 animate background { duration: 100ms; }
 
@@ -536,7 +536,7 @@ export component ToolShell inherits Rectangle {
                     x: (parent.width - 10px) / 2;
                     y: (parent.height - 10px) / 2;
                     commands: "M 1.5 1.5 L 8.5 8.5 M 8.5 1.5 L 1.5 8.5";
-                    stroke: close-touch.has-hover ? (close-touch.pressed ? #DC2626 : #475569) : #94A3B8;
+                    stroke: close-touch.has-hover ? (close-touch.pressed ? Theme.error-fg : Theme.foreground-soft) : Theme.muted;
                     stroke-width: 1.5px;
                 }
                 close-touch := TouchArea {
@@ -633,7 +633,7 @@ export component ToolShell inherits Rectangle {
             width: 2px;
             height: 2px;
             border-radius: 1px;
-            background: #94A3B8;
+            background: Theme.muted;
         }
         Rectangle {
             x: 1px;
@@ -641,7 +641,7 @@ export component ToolShell inherits Rectangle {
             width: 2px;
             height: 2px;
             border-radius: 1px;
-            background: #94A3B8;
+            background: Theme.muted;
         }
         Rectangle {
             x: 5px;
@@ -649,7 +649,7 @@ export component ToolShell inherits Rectangle {
             width: 2px;
             height: 2px;
             border-radius: 1px;
-            background: #94A3B8;
+            background: Theme.muted;
         }
     }
 }

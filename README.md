@@ -24,7 +24,7 @@
 - 🌐 **轨道悬浮交互**：常驻屏幕的极简主悬浮球，支持自由拖拽；点击平滑弹出 3 颗环绕功能球（时间戳 / JSON / 翻译），零干扰桌面视线。
 - ⚡ **多进程独立架构**：主程序仅负责悬浮球呈现与调度；各个工具窗口均为独立编译的 Rust 进程，彼此崩溃隔离、资源解耦、随开随走。
 - 🎯 **单例与极速聚焦**：各功能窗口通过平台原生 IPC（Linux Unix Domain Socket / Windows Named Pipe）实现单例机制；再次启动时毫秒级拉起并聚焦已有窗口。
-- 🎨 **统一度量与暗色主题**：通过 `xtools-ui` 统一 Slint 样式、色彩系统与无边框沉浸式窗口组件，各工具视觉风格高度一致。
+- 🎨 **统一度量与主题系统**：通过 `xtools-ui` 统一 Slint 主题 token、共享组件与无边框沉浸式窗口组件；自动跟随系统浅色 / 深色模式实时切换。
 - 🐧 **现代 Linux 桌面原生支持**：支持 Wayland（`gtk4-layer-shell` 协议层）与 X11 混合环境，内置 SNI 规范系统托盘（System Tray）支持。
 - 🪟 **Windows 原生支持**：基于 Win32 分层窗口（`UpdateLayeredWindow` 逐像素透明）与 Named Pipe 单例 IPC，声明 Per-Monitor V2 DPI 感知，提供悬浮球与系统托盘，CI 自动产出便携 ZIP 与 Inno Setup 安装包。
 
