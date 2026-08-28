@@ -6,6 +6,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+if (-not $env:SLINT_BACKEND) {
+    $env:SLINT_BACKEND = 'winit-software'
+}
 
 if (-not [Environment]::UserInteractive) {
     throw 'Windows singleton smoke test requires an interactive desktop session (the GitHub Windows runner provides one).'

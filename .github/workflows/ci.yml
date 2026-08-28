@@ -82,4 +82,6 @@ jobs:
         run: cargo build --workspace --release
       - name: Smoke Test Windows Singleton Tools
         shell: pwsh
+        env:
+          SLINT_BACKEND: winit-software
         run: ./scripts/windows-singleton-smoke.ps1 -TargetDir "$env:GITHUB_WORKSPACE/target/release"
