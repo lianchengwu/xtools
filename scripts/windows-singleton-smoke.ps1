@@ -22,10 +22,19 @@ function Wait-ForExit([System.Diagnostics.Process] $Process, [int] $Milliseconds
     }
 }
 
-function Assert-Alive([System.Diagnostics.Process] $Process, [string] $Description) {
+function Assert-Alive([System.Diagnostics.Process] $Process, [string] $Description, [string] $ErrPath = $null, [string] $OutPath = $null) {
     $Process.Refresh()
     if ($Process.HasExited) {
-        throw "$Description process $($Process.Id) exited unexpectedly (exit code $($Process.ExitCode))."
+        $extra = ""
+        if ($ErrPath -and (Test-Path -LiteralPath $ErrPath)) {
+            $errContent = Get-Content -Raw -LiteralPath $ErrPath
+            if ($errContent) { $extra += "`nProcess Stderr:`n$errContent" }
+        }
+        if ($OutPath -and (Test-Path -LiteralPath $OutPath)) {
+            $outContent = Get-Content -Raw -LiteralPath $OutPath
+            if ($outContent) { $extra += "`nProcess Stdout:`n$outContent" }
+        }
+        throw "$Description process $($Process.Id) exited unexpectedly (exit code $($Process.ExitCode)).$extra"
     }
 }
 function Stop-SingletonTool([string] $ToolName, [System.Diagnostics.Process] $Process) {
@@ -60,26 +69,33 @@ try {
         }
 
         Write-Host "Testing singleton behavior for $tool"
-        $first = Start-Process -FilePath $path -WorkingDirectory $TargetDir -PassThru
+        $firstErr = Join-Path $env:TEMP "$tool-first-stderr-$([guid]::NewGuid()).log"
+        $firstOut = Join-Path $env:TEMP "$tool-first-stdout-$([guid]::NewGuid()).log"
+        $first = Start-Process -FilePath $path -WorkingDirectory $TargetDir -RedirectStandardError $firstErr -RedirectStandardOutput $firstOut -PassThru
         $started.Add($first)
         Start-Sleep -Milliseconds 500
-        Assert-Alive $first 'First'
+        Assert-Alive $first 'First' $firstErr $firstOut
 
-        $second = Start-Process -FilePath $path -WorkingDirectory $TargetDir -PassThru
+        $secondErr = Join-Path $env:TEMP "$tool-second-stderr-$([guid]::NewGuid()).log"
+        $secondOut = Join-Path $env:TEMP "$tool-second-stdout-$([guid]::NewGuid()).log"
+        $second = Start-Process -FilePath $path -WorkingDirectory $TargetDir -RedirectStandardError $secondErr -RedirectStandardOutput $secondOut -PassThru
         $started.Add($second)
         Wait-ForExit $second ($TimeoutSeconds * 1000)
         if ($second.ExitCode -ne 0) {
-            throw "Second $tool launch exited with code $($second.ExitCode), expected a normal singleton handoff."
+            $errContent = if (Test-Path -LiteralPath $secondErr) { Get-Content -Raw -LiteralPath $secondErr } else { "" }
+            throw "Second $tool launch exited with code $($second.ExitCode), expected a normal singleton handoff.`nStderr: $errContent"
         }
-        Assert-Alive $first 'First'
+        Assert-Alive $first 'First' $firstErr $firstOut
 
         Stop-SingletonTool $tool $first
         Start-Sleep -Milliseconds 500
 
-        $third = Start-Process -FilePath $path -WorkingDirectory $TargetDir -PassThru
+        $thirdErr = Join-Path $env:TEMP "$tool-third-stderr-$([guid]::NewGuid()).log"
+        $thirdOut = Join-Path $env:TEMP "$tool-third-stdout-$([guid]::NewGuid()).log"
+        $third = Start-Process -FilePath $path -WorkingDirectory $TargetDir -RedirectStandardError $thirdErr -RedirectStandardOutput $thirdOut -PassThru
         $started.Add($third)
         Start-Sleep -Milliseconds 500
-        Assert-Alive $third 'Later launch'
+        Assert-Alive $third 'Later launch' $thirdErr $thirdOut
         Write-Host "$tool singleton smoke test passed"
     }
 }
