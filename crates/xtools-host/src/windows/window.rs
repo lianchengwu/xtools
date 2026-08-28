@@ -10,33 +10,33 @@ use windows_sys::Win32::Foundation::{
 };
 use windows_sys::Win32::Graphics::Gdi::{
     AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION,
-    CreateCompatibleDC, CreateDIBSection, DIB_RGB_COLORS, DeleteDC, DeleteObject,
-    GetDC, HBITMAP, HDC, ReleaseDC, SelectObject,
+    CreateCompatibleDC, CreateDIBSection, DIB_RGB_COLORS, DeleteDC, DeleteObject, GetDC,
+    GetMonitorInfoW, HBITMAP, HDC, MONITOR_DEFAULTTONEAREST, MONITORINFO, MonitorFromWindow,
+    ReleaseDC, SelectObject,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::UI::HiDpi::{
+    DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForWindow, SetProcessDpiAwarenessContext,
+};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{ReleaseCapture, SetCapture};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetCursorPos,
-    GetMessageW, GetSystemMetrics, KillTimer, MSG, PostQuitMessage, RegisterClassExW,
-    SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOSIZE,
-    SWP_NOZORDER, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow,
-    SystemParametersInfoW, GWLP_USERDATA, HWND_TOPMOST, HTCLIENT, HTTRANSPARENT,
-    SPI_GETWORKAREA, ULW_ALPHA, UpdateLayeredWindow, WM_COMMAND, WM_DESTROY,
-    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCHITTEST, WM_RBUTTONUP,
-    WM_TIMER, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GWLP_USERDATA, GetCursorPos,
+    GetMessageW, GetSystemMetrics, HTCLIENT, HTTRANSPARENT, HWND_TOPMOST, KillTimer, MSG,
+    PostQuitMessage, RegisterClassExW, SM_CXSCREEN, SM_CYSCREEN, SPI_GETWORKAREA, SW_HIDE, SW_SHOW,
+    SWP_NOACTIVATE, SWP_NOSIZE, SWP_NOZORDER, SetTimer, SetWindowLongPtrW, SetWindowPos,
+    ShowWindow, SystemParametersInfoW, ULW_ALPHA, UpdateLayeredWindow, WM_COMMAND, WM_DESTROY,
+    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCHITTEST, WM_RBUTTONUP, WM_TIMER, WNDCLASSEXW,
+    WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 use xtools_ui::{
-    HOST_INSTANCE, SLOP, ToolId, claim_instance, func_radius, main_radius,
-    raise_instance,
+    HOST_INSTANCE, SLOP, ToolId, claim_instance, func_radius, main_radius, raise_instance,
 };
 
 use crate::anim;
 use crate::layout::{Rect, fan_seats, hit_disk};
 use crate::windows::paint::{Surface, draw_func, draw_main};
-use crate::windows::tray::{
-    ID_TRAY_QUIT, ID_TRAY_SHOW_HIDE, TrayIcon, WM_TRAY_CALLBACK,
-};
+use crate::windows::tray::{ID_TRAY_QUIT, ID_TRAY_SHOW_HIDE, TrayIcon, WM_TRAY_CALLBACK};
 const TIMER_ANIM: usize = 1;
 const TIMER_IPC: usize = 2;
 
@@ -92,13 +92,12 @@ pub struct HostWindow {
 
 impl HostWindow {
     pub fn new(hwnd: HWND, listener: xtools_ui::InstanceListener) -> Self {
-        let (screen_w, screen_h) = get_work_area_size();
+        let work = get_work_area(hwnd);
+        let work_w = work.right - work.left;
+        let work_h = work.bottom - work.top;
 
-        let scale: f64 = if screen_w >= 2560 || screen_h >= 1600 {
-            1.5
-        } else {
-            1.0
-        };
+        // Real per-monitor DPI (96 = 100%), replacing the old resolution heuristic.
+        let scale: f64 = (get_window_dpi(hwnd) as f64 / 96.0).clamp(1.0, 3.0);
 
         let win_w = (320.0 * scale).round() as i32;
         let win_h = (320.0 * scale).round() as i32;
@@ -108,8 +107,8 @@ impl HostWindow {
         let main_lx = win_w as f64 - main_r - (16.0 * scale);
         let main_ly = win_h as f64 / 2.0;
 
-        let win_x = (screen_w - win_w).max(0);
-        let win_y = ((screen_h - win_h) / 2).max(0);
+        let win_x = work.right - win_w;
+        let win_y = work.top + ((work_h - win_h) / 2).max(0);
 
         let hdc_screen = unsafe { GetDC(std::ptr::null_mut()) };
         let mem_dc = unsafe { CreateCompatibleDC(hdc_screen) };
@@ -304,21 +303,17 @@ impl HostWindow {
                     }
                     self.redraw();
                 }
-                _ => {
-                    unsafe {
-                        KillTimer(self.hwnd, TIMER_ANIM);
-                    }
-                }
+                _ => unsafe {
+                    KillTimer(self.hwnd, TIMER_ANIM);
+                },
             }
         } else if timer_id == TIMER_IPC {
             if let Some(listener) = &self.listener {
                 match xtools_ui::accept_command(listener) {
-                    Some(xtools_ui::InstanceCommand::Quit) => {
-                        unsafe {
-                            DestroyWindow(self.hwnd);
-                            PostQuitMessage(0);
-                        }
-                    }
+                    Some(xtools_ui::InstanceCommand::Quit) => unsafe {
+                        DestroyWindow(self.hwnd);
+                        PostQuitMessage(0);
+                    },
                     Some(xtools_ui::InstanceCommand::Raise(_)) => {
                         self.is_visible = true;
                         unsafe {
@@ -396,9 +391,9 @@ impl HostWindow {
             let new_x = self.drag_start_win.0 + dx;
             let new_y = self.drag_start_win.1 + dy;
 
-            let (screen_w, screen_h) = get_work_area_size();
-            let clamped_x = new_x.clamp(-self.win_w / 2, screen_w - self.win_w / 2);
-            let clamped_y = new_y.clamp(-self.win_h / 2, screen_h - self.win_h / 2);
+            let work = get_work_area(self.hwnd);
+            let clamped_x = new_x.clamp(work.left - self.win_w / 2, work.right - self.win_w / 2);
+            let clamped_y = new_y.clamp(work.top - self.win_h / 2, work.bottom - self.win_h / 2);
 
             self.win_x = clamped_x;
             self.win_y = clamped_y;
@@ -496,7 +491,19 @@ impl Drop for HostWindow {
     }
 }
 
-fn get_work_area_size() -> (i32, i32) {
+/// Work area (excluding the taskbar) of the monitor that currently owns `hwnd`,
+/// so dragging across monitors clamps against the right display.
+fn get_work_area(hwnd: HWND) -> WIN_RECT {
+    let hmon = unsafe { MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST) };
+    if !hmon.is_null() {
+        let mut info: MONITORINFO = unsafe { zeroed() };
+        info.cbSize = std::mem::size_of::<MONITORINFO>() as u32;
+        if unsafe { GetMonitorInfoW(hmon, &mut info) } != 0 {
+            return info.rcWork;
+        }
+    }
+
+    // Fallback: primary monitor work area.
     let mut rect: WIN_RECT = unsafe { zeroed() };
     let ok = unsafe {
         SystemParametersInfoW(
@@ -506,16 +513,17 @@ fn get_work_area_size() -> (i32, i32) {
             0,
         )
     };
-    if ok != 0 {
-        (rect.right - rect.left, rect.bottom - rect.top)
-    } else {
-        unsafe {
-            (
-                GetSystemMetrics(SM_CXSCREEN),
-                GetSystemMetrics(SM_CYSCREEN),
-            )
-        }
+    if ok == 0 {
+        rect.right = unsafe { GetSystemMetrics(SM_CXSCREEN) };
+        rect.bottom = unsafe { GetSystemMetrics(SM_CYSCREEN) };
     }
+    rect
+}
+
+/// Effective DPI of the window's monitor (96 = 100% scale).
+fn get_window_dpi(hwnd: HWND) -> u32 {
+    let dpi = unsafe { GetDpiForWindow(hwnd) };
+    if dpi == 0 { 96 } else { dpi }
 }
 
 fn sibling_bin(name: &str) -> Option<PathBuf> {
@@ -620,6 +628,12 @@ unsafe extern "system" fn window_proc(
 }
 
 pub fn run() {
+    // Opt into per-monitor DPI awareness so the window is not bitmap-stretched
+    // on high-DPI displays. The call is a no-op failure on legacy systems.
+    unsafe {
+        SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    }
+
     let mut lock = None;
     for _ in 0..15 {
         match claim_instance(HOST_INSTANCE) {
