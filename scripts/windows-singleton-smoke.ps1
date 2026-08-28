@@ -28,6 +28,29 @@ function Assert-Alive([System.Diagnostics.Process] $Process, [string] $Descripti
         throw "$Description process $($Process.Id) exited unexpectedly (exit code $($Process.ExitCode))."
     }
 }
+function Stop-SingletonTool([string] $ToolName, [System.Diagnostics.Process] $Process) {
+    try {
+        $pipeName = "xtools-$env:USERNAME-$ToolName"
+        $pipe = [System.IO.Pipes.NamedPipeClientStream]::new('.', $pipeName, [System.IO.Pipes.PipeDirection]::Out)
+        $pipe.Connect(500)
+        $writer = [System.IO.StreamWriter]::new($pipe)
+        $writer.WriteLine("QUIT")
+        $writer.Flush()
+        $pipe.Dispose()
+    } catch {
+        # Ignore connect error and fallback to window close / process kill
+    }
+
+    $Process.CloseMainWindow() | Out-Null
+    if (-not $Process.WaitForExit(3000)) {
+        $Process.Kill()
+        [void]$Process.WaitForExit(3000)
+    }
+    if (-not $Process.HasExited) {
+        throw "Could not terminate first $ToolName process $($Process.Id)."
+    }
+}
+
 
 try {
     foreach ($tool in $tools) {
@@ -50,14 +73,7 @@ try {
         }
         Assert-Alive $first 'First'
 
-        $first.CloseMainWindow() | Out-Null
-        if (-not $first.WaitForExit(3000)) {
-            $first.Kill()
-            [void]$first.WaitForExit(3000)
-        }
-        if (-not $first.HasExited) {
-            throw "Could not terminate first $tool process $($first.Id)."
-        }
+        Stop-SingletonTool $tool $first
         Start-Sleep -Milliseconds 500
 
         $third = Start-Process -FilePath $path -WorkingDirectory $TargetDir -PassThru

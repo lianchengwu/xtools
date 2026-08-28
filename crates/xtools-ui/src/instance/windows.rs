@@ -111,6 +111,7 @@ pub fn claim_instance(name: &str) -> io::Result<Option<InstanceListener>> {
             }
             Err(err) => {
                 last_err = Some(err);
+                let _ = connect(&pipe_name);
                 std::thread::sleep(std::time::Duration::from_millis(40));
             }
         }
