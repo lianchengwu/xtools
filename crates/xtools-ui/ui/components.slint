@@ -300,8 +300,7 @@ export component DropdownPopup inherits Rectangle {
     drop-shadow-blur: 16px;
     drop-shadow-color: #0000001E;
     drop-shadow-offset-y: 4px;
-    max-height: 260px;
-
+    height: min(260px, max(68px, root.options.length * 32px + 10px));
     ScrollView {
         VerticalLayout {
             padding: 4px;
@@ -394,8 +393,11 @@ export component DropdownSelector inherits Rectangle {
         x: 0px;
         y: root.height + 4px;
         width: root.width;
+        height: min(260px, max(68px, root.options.length * 32px + 10px));
 
         DropdownPopup {
+            width: 100%;
+            height: 100%;
             options: root.options;
             selected-index: root.selected-index;
             selected(idx) => {
@@ -417,7 +419,7 @@ export component ToolShell inherits Rectangle {
     callback expand-clicked();
     callback window-drag-started();
     callback window-dragged(length, length);
-    callback window-resize-started();
+    callback window-resize-started(int);
     callback window-resized(length, length);
 
     border-radius: Theme.radius-card;
@@ -488,13 +490,16 @@ export component ToolShell inherits Rectangle {
 
                 animate background { duration: 100ms; }
 
-                Text {
-                    text: root.is-expanded ? "⤡" : "⤢";
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: expand-touch.has-hover ? #0F172A : #64748B;
-                    vertical-alignment: center;
-                    horizontal-alignment: center;
+                Path {
+                    width: 10px;
+                    height: 10px;
+                    x: (parent.width - 10px) / 2;
+                    y: (parent.height - 10px) / 2;
+                    commands: root.is-expanded
+                        ? "M 1 4 L 4 4 L 4 1 M 9 6 L 6 6 L 6 9 M 4 4 L 1 1 M 6 6 L 9 9"
+                        : "M 4 1 L 1 1 L 1 4 M 6 9 L 9 9 L 9 6 M 1 1 L 4 4 M 9 9 L 6 6";
+                    stroke: expand-touch.has-hover ? #0F172A : #64748B;
+                    stroke-width: 1.2px;
                 }
 
                 expand-touch := TouchArea {
@@ -517,15 +522,15 @@ export component ToolShell inherits Rectangle {
 
                 animate background { duration: 100ms; }
 
-                Text {
-                    text: "✕";
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: close-touch.has-hover ? (close-touch.pressed ? #DC2626 : #475569) : #94A3B8;
-                    vertical-alignment: center;
-                    horizontal-alignment: center;
+                Path {
+                    width: 10px;
+                    height: 10px;
+                    x: (parent.width - 10px) / 2;
+                    y: (parent.height - 10px) / 2;
+                    commands: "M 1.5 1.5 L 8.5 8.5 M 8.5 1.5 L 1.5 8.5";
+                    stroke: close-touch.has-hover ? (close-touch.pressed ? #DC2626 : #475569) : #94A3B8;
+                    stroke-width: 1.5px;
                 }
-
                 close-touch := TouchArea {
                     clicked => {
                         root.close-clicked();
@@ -565,7 +570,7 @@ export component ToolShell inherits Rectangle {
         mouse-cursor: ew-resize;
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
-                root.window-resize-started();
+                root.window-resize-started(1);
             }
         }
         moved => {
@@ -582,7 +587,7 @@ export component ToolShell inherits Rectangle {
         mouse-cursor: ns-resize;
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
-                root.window-resize-started();
+                root.window-resize-started(2);
             }
         }
         moved => {
@@ -599,7 +604,7 @@ export component ToolShell inherits Rectangle {
         mouse-cursor: nwse-resize;
         pointer-event(event) => {
             if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
-                root.window-resize-started();
+                root.window-resize-started(3);
             }
         }
         moved => {

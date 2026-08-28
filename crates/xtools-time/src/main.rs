@@ -2,13 +2,14 @@ mod app;
 mod convert;
 
 use xtools_ui::{
-    TIME_INSTANCE, capture_target_desktop, claim_instance, prefer_x11_for_skip_taskbar,
-    raise_instance, take_activation_token,
+    TIME_INSTANCE, capture_target_desktop, claim_instance, init_input_method_env,
+    prefer_x11_for_skip_taskbar, raise_instance, take_activation_token,
 };
 
 use crate::app::TimeApp;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    init_input_method_env();
     capture_target_desktop();
     prefer_x11_for_skip_taskbar();
     let token = take_activation_token();

@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use slint::{ComponentHandle, ModelRc, VecModel};
 use xtools_ui::slint_chrome::{
-    WindowDragState, WindowResizeState, copy_to_clipboard, setup_raise_timer,
+    ResizeEdge, WindowDragState, WindowResizeState, copy_to_clipboard, setup_raise_timer,
 };
 #[cfg(unix)]
 use xtools_ui::slint_chrome::{setup_auto_exit_on_focus_loss_timer, setup_skip_taskbar_timer};
@@ -74,9 +74,15 @@ impl JsonApp {
         {
             let resize = resize_state.clone();
             let ui_weak = ui.as_weak();
-            ui.on_window_resize_started(move || {
+            ui.on_window_resize_started(move |edge_code| {
                 if let Some(ui) = ui_weak.upgrade() {
-                    resize.on_resize_started(ui.window());
+                    let edge = match edge_code {
+                        1 => Some(ResizeEdge::East),
+                        2 => Some(ResizeEdge::South),
+                        3 => Some(ResizeEdge::SouthEast),
+                        _ => None,
+                    };
+                    resize.on_resize_started(ui.window(), edge);
                 }
             });
         }

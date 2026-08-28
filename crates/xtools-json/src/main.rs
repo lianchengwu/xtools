@@ -2,13 +2,14 @@ mod app;
 mod json_ops;
 
 use xtools_ui::{
-    JSON_INSTANCE, capture_target_desktop, claim_instance, prefer_x11_for_skip_taskbar,
-    raise_instance, take_activation_token,
+    JSON_INSTANCE, capture_target_desktop, claim_instance, init_input_method_env,
+    prefer_x11_for_skip_taskbar, raise_instance, take_activation_token,
 };
 
 use crate::app::JsonApp;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    init_input_method_env();
     capture_target_desktop();
     prefer_x11_for_skip_taskbar();
     let token = take_activation_token();

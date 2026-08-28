@@ -515,6 +515,15 @@ fn launch_tool(id: ToolId, _event: Option<&gtk4::gdk::Event>) {
     if let Some(desk) = &desktop {
         cmd.env("XTOOLS_TARGET_DESKTOP", desk);
     }
+    if std::env::var("XMODIFIERS").map_or(true, |v| v.trim().is_empty()) {
+        cmd.env("XMODIFIERS", "@im=fcitx");
+    }
+    if std::env::var("GTK_IM_MODULE").map_or(true, |v| v.trim().is_empty()) {
+        cmd.env("GTK_IM_MODULE", "fcitx");
+    }
+    if std::env::var("QT_IM_MODULE").map_or(true, |v| v.trim().is_empty()) {
+        cmd.env("QT_IM_MODULE", "fcitx");
+    }
 
     match cmd.spawn() {
         Ok(mut child) => {
@@ -536,6 +545,7 @@ fn launch_tool(id: ToolId, _event: Option<&gtk4::gdk::Event>) {
 }
 
 pub fn run() {
+    xtools_ui::init_input_method_env();
     let instance = match claim_instance(HOST_INSTANCE) {
         Ok(Some(listener)) => listener,
         Ok(None) => {

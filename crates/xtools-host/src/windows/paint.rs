@@ -53,6 +53,54 @@ impl Surface {
             | out_b.min(255);
     }
 
+    #[inline]
+    pub fn blend_pixel_rgba8(&mut self, x: i32, y: i32, r: u8, g: u8, b: u8, a: u8) {
+        if x < 0 || x >= self.width || y < 0 || y >= self.height || a == 0 {
+            return;
+        }
+        let src_a = a as u32;
+        let src_r = r as u32;
+        let src_g = g as u32;
+        let src_b = b as u32;
+
+        let idx = (y * self.width + x) as usize;
+        let dst = self.pixels[idx];
+        let dst_a = (dst >> 24) & 0xFF;
+        let dst_r = (dst >> 16) & 0xFF;
+        let dst_g = (dst >> 8) & 0xFF;
+        let dst_b = dst & 0xFF;
+
+        let inv_a = 255 - src_a;
+        let out_a = src_a + (dst_a * inv_a + 127) / 255;
+        let out_r = src_r + (dst_r * inv_a + 127) / 255;
+        let out_g = src_g + (dst_g * inv_a + 127) / 255;
+        let out_b = src_b + (dst_b * inv_a + 127) / 255;
+
+        self.pixels[idx] = (out_a.min(255) << 24)
+            | (out_r.min(255) << 16)
+            | (out_g.min(255) << 8)
+            | out_b.min(255);
+    }
+
+    /// Blend a tiny_skia Pixmap onto this surface at (px, py).
+    pub fn draw_pixmap(&mut self, px: i32, py: i32, pixmap: &tiny_skia::Pixmap) {
+        let w = pixmap.width() as i32;
+        let h = pixmap.height() as i32;
+        let data = pixmap.data();
+        for y in 0..h {
+            for x in 0..w {
+                let offset = ((y * w + x) * 4) as usize;
+                let r = data[offset];
+                let g = data[offset + 1];
+                let b = data[offset + 2];
+                let a = data[offset + 3];
+                if a > 0 {
+                    self.blend_pixel_rgba8(px + x, py + y, r, g, b, a);
+                }
+            }
+        }
+    }
+
     /// Antialiased filled circle.
     pub fn draw_circle_filled(&mut self, cx: f64, cy: f64, radius: f64, color: Color) {
         let min_x = (cx - radius - 1.0).floor() as i32;
@@ -184,7 +232,21 @@ fn draw_clock(surface: &mut Surface, cx: f64, cy: f64, fr: f64, color: Color) {
     surface.draw_line(cx, cy, cx + fr * 0.16, cy + fr * 0.04, stroke * 0.9, color);
 }
 
-/// Draw stylized 'x' logo mark on main ball.
+const XTOOLS_SVG: &[u8] = include_bytes!("../../../../xtools.svg");
+
+/// Render the embedded SVG icon to a tiny_skia Pixmap.
+fn render_svg_icon(size: u32) -> Option<tiny_skia::Pixmap> {
+    let opt = usvg::Options::default();
+    let tree = usvg::Tree::from_data(XTOOLS_SVG, &opt).ok()?;
+    let mut pixmap = tiny_skia::Pixmap::new(size, size)?;
+    let sx = size as f32 / tree.size().width();
+    let sy = size as f32 / tree.size().height();
+    let transform = tiny_skia::Transform::from_scale(sx, sy);
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+    Some(pixmap)
+}
+
+/// Draw stylized 'x' logo mark on main ball (fallback if SVG cannot be rendered).
 fn draw_main_mark(surface: &mut Surface, cx: f64, cy: f64, scale: f64, color: Color) {
     let size = 7.5 * scale;
     let stroke = (2.4 * scale).max(1.5);
@@ -207,8 +269,15 @@ pub fn draw_main(surface: &mut Surface, cx: f64, cy: f64, scale: f64) {
         (1.0 * scale).max(1.0),
         Color::rgba(ORB_MARK.r, ORB_MARK.g, ORB_MARK.b, 0.15),
     );
-    // Stylized mark
-    draw_main_mark(surface, cx, cy, scale, ORB_MARK);
+    // Render the real app icon (SVG)
+    let icon_size = (32.0 * scale).round() as u32;
+    if let Some(pixmap) = render_svg_icon(icon_size) {
+        let px = (cx - f64::from(icon_size) / 2.0).round() as i32;
+        let py = (cy - f64::from(icon_size) / 2.0).round() as i32;
+        surface.draw_pixmap(px, py, &pixmap);
+    } else {
+        draw_main_mark(surface, cx, cy, scale, ORB_MARK);
+    }
 }
 
 /// Draw a function ball (Time, Json, Trans) with opacity t (0.0..=1.0).
@@ -294,6 +363,22 @@ mod tests {
 
         // Corner (0, 0) should remain 100% transparent
         assert_eq!(surface.pixels[0], 0, "corner should be transparent");
+    }
+
+    #[test]
+    fn svg_icon_renders_and_draws() {
+        let pixmap = render_svg_icon(32);
+        assert!(pixmap.is_some(), "xtools.svg should render to 32x32 Pixmap");
+        let pixmap = pixmap.unwrap();
+        assert_eq!(pixmap.width(), 32);
+        assert_eq!(pixmap.height(), 32);
+
+        let mut surface = Surface::new(100, 100);
+        draw_main(&mut surface, 50.0, 50.0, 1.0);
+        let center_idx = 50 * 100 + 50;
+        let center_pixel = surface.pixels[center_idx];
+        let alpha = (center_pixel >> 24) & 0xFF;
+        assert!(alpha > 0, "main ball with SVG icon should have alpha at center");
     }
 
     #[test]

@@ -18,28 +18,59 @@ pub fn copy_to_clipboard(text: &str) {
     }
 }
 
+/// Resize edge direction for window resize operations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ResizeEdge {
+    East,
+    South,
+    SouthEast,
+}
+
 /// Helper for smooth window dragging on undecorated Slint windows.
 #[derive(Clone, Default)]
 pub struct WindowDragState {
     start_pos: Arc<Mutex<Option<slint::PhysicalPosition>>>,
+    is_native_drag: Arc<Mutex<bool>>,
 }
 
 impl WindowDragState {
     pub fn new() -> Self {
         Self {
             start_pos: Arc::new(Mutex::new(None)),
+            is_native_drag: Arc::new(Mutex::new(false)),
         }
     }
 
     pub fn on_drag_started(&self, window: &slint::Window) {
-        let pos = window.position();
-        *self.start_pos.lock() = Some(pos);
+        let mut native_handled = false;
+        #[cfg(feature = "slint-chrome")]
+        {
+            use i_slint_backend_winit::WinitWindowAccessor;
+            let res = window.with_winit_window(|winit_win| {
+                winit_win.drag_window().is_ok()
+            });
+            if let Some(true) = res {
+                native_handled = true;
+            }
+        }
+        *self.is_native_drag.lock() = native_handled;
+        if !native_handled {
+            let pos = window.position();
+            *self.start_pos.lock() = Some(pos);
+        } else {
+            *self.start_pos.lock() = None;
+        }
     }
 
     pub fn on_dragged(&self, window: &slint::Window, dx: f32, dy: f32) {
+        // If native OS window dragging took over, DO NOT manually set position (otherwise it snaps back)
+        if *self.is_native_drag.lock() {
+            return;
+        }
         if let Some(base_pos) = *self.start_pos.lock() {
-            let new_x = base_pos.x + dx.round() as i32;
-            let new_y = base_pos.y + dy.round() as i32;
+            let scale = window.scale_factor();
+            let new_x = base_pos.x + (dx * scale).round() as i32;
+            let new_y = base_pos.y + (dy * scale).round() as i32;
             window.set_position(slint::PhysicalPosition::new(new_x, new_y));
         }
     }
@@ -50,6 +81,7 @@ impl WindowDragState {
 pub struct WindowResizeState {
     start_size: Arc<Mutex<Option<slint::PhysicalSize>>>,
     saved_size: Arc<Mutex<Option<slint::PhysicalSize>>>,
+    is_native_resize: Arc<Mutex<bool>>,
 }
 
 impl WindowResizeState {
@@ -57,15 +89,45 @@ impl WindowResizeState {
         Self {
             start_size: Arc::new(Mutex::new(None)),
             saved_size: Arc::new(Mutex::new(None)),
+            is_native_resize: Arc::new(Mutex::new(false)),
         }
     }
 
-    pub fn on_resize_started(&self, window: &slint::Window) {
-        let size = window.size();
-        *self.start_size.lock() = Some(size);
+    pub fn on_resize_started(&self, window: &slint::Window, edge: Option<ResizeEdge>) {
+        let mut native_handled = false;
+        #[cfg(feature = "slint-chrome")]
+        {
+            use i_slint_backend_winit::WinitWindowAccessor;
+            if let Some(edge) = edge {
+                let dir = match edge {
+                    ResizeEdge::East => i_slint_backend_winit::winit::window::ResizeDirection::East,
+                    ResizeEdge::South => i_slint_backend_winit::winit::window::ResizeDirection::South,
+                    ResizeEdge::SouthEast => {
+                        i_slint_backend_winit::winit::window::ResizeDirection::SouthEast
+                    }
+                };
+                let res = window.with_winit_window(|winit_win| {
+                    winit_win.drag_resize_window(dir).is_ok()
+                });
+                if let Some(true) = res {
+                    native_handled = true;
+                }
+            }
+        }
+        *self.is_native_resize.lock() = native_handled;
+        if !native_handled {
+            let size = window.size();
+            *self.start_size.lock() = Some(size);
+        } else {
+            *self.start_size.lock() = None;
+        }
     }
 
     pub fn on_resized(&self, window: &slint::Window, dx: f32, dy: f32, min_w: u32, min_h: u32) {
+        // If native OS window resizing took over, DO NOT manually set size
+        if *self.is_native_resize.lock() {
+            return;
+        }
         if let Some(base_size) = *self.start_size.lock() {
             let scale = window.scale_factor();
             let min_phys_w = (min_w as f32 * scale).round() as u32;
@@ -77,7 +139,6 @@ impl WindowResizeState {
             window.set_size(slint::PhysicalSize::new(new_w, new_h));
         }
     }
-
     pub fn toggle_expand(
         &self,
         window: &slint::Window,
@@ -221,7 +282,7 @@ mod tests {
         drag.on_dragged(win.window(), 10.0, 20.0);
 
         let resize = WindowResizeState::new();
-        resize.on_resize_started(win.window());
+        resize.on_resize_started(win.window(), Some(ResizeEdge::SouthEast));
         resize.on_resized(win.window(), 50.0, 60.0, 50, 50);
         let exp = resize.toggle_expand(win.window(), 100, 100, 200, 200);
         assert!(exp);

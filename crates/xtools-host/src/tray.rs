@@ -2,7 +2,6 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::Sender;
 
-use gtk4::gdk_pixbuf::Pixbuf;
 use ksni::blocking::TrayMethods;
 use ksni::menu::{MenuItem, StandardItem};
 use ksni::{Icon, ToolTip, Tray};
@@ -105,63 +104,52 @@ pub fn render_icons() -> Vec<Icon> {
     icons
 }
 
-fn load_base_pixbuf() -> Option<Pixbuf> {
-    Pixbuf::from_read(std::io::Cursor::new(XTOOLS_SVG)).ok()
-}
-
 fn render_icon(size: i32) -> Option<Icon> {
-    let base = load_base_pixbuf()?;
-    let pb = base.scale_simple(size, size, gtk4::gdk_pixbuf::InterpType::Bilinear)?;
-    pixbuf_to_sni_icon(&pb)
-}
+    let opt = usvg::Options::default();
+    let tree = usvg::Tree::from_data(XTOOLS_SVG, &opt).ok()?;
+    let u_size = size.max(1) as u32;
+    let mut pixmap = tiny_skia::Pixmap::new(u_size, u_size)?;
+    let sx = u_size as f32 / tree.size().width();
+    let sy = u_size as f32 / tree.size().height();
+    let transform = tiny_skia::Transform::from_scale(sx, sy);
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
 
-fn pixbuf_to_sni_icon(pb: &Pixbuf) -> Option<Icon> {
-    let width = pb.width();
-    let height = pb.height();
-    let n_channels = pb.n_channels();
-    if width <= 0 || height <= 0 || n_channels < 3 {
-        return None;
-    }
-    let rowstride = pb.rowstride() as usize;
-    let bytes = pb.read_pixel_bytes();
-    let slice = bytes.as_ref();
-
-    let mut data = Vec::with_capacity((width * height * 4) as usize);
-    for y in 0..height as usize {
-        let row_start = y * rowstride;
-        for x in 0..width as usize {
-            let px = row_start + x * n_channels as usize;
-            if px + n_channels as usize > slice.len() {
-                return None;
-            }
-            let r = slice[px];
-            let g = slice[px + 1];
-            let b = slice[px + 2];
-            let a = if n_channels >= 4 { slice[px + 3] } else { 255 };
-            let (r, g, b) = if r < 50 && g < 50 && b < 50 {
-                (240, 240, 245)
-            } else {
-                (r, g, b)
-            };
-            data.extend_from_slice(&[a, r, g, b]);
-        }
+    let src = pixmap.data();
+    let mut data = Vec::with_capacity((u_size * u_size * 4) as usize);
+    for i in 0..(u_size * u_size) as usize {
+        let r = src[i * 4];
+        let g = src[i * 4 + 1];
+        let b = src[i * 4 + 2];
+        let a = src[i * 4 + 3];
+        let (r, g, b) = if r < 50 && g < 50 && b < 50 {
+            (240, 240, 245)
+        } else {
+            (r, g, b)
+        };
+        data.extend_from_slice(&[a, r, g, b]);
     }
 
     Some(Icon {
-        width,
-        height,
+        width: size,
+        height: size,
         data,
     })
 }
 
 fn write_theme_icon() -> Option<String> {
-    let base = load_base_pixbuf()?;
-    let pb = base.scale_simple(32, 32, gtk4::gdk_pixbuf::InterpType::Bilinear)?;
+    let opt = usvg::Options::default();
+    let tree = usvg::Tree::from_data(XTOOLS_SVG, &opt).ok()?;
+    let mut pixmap = tiny_skia::Pixmap::new(32, 32)?;
+    let sx = 32.0 / tree.size().width();
+    let sy = 32.0 / tree.size().height();
+    let transform = tiny_skia::Transform::from_scale(sx, sy);
+    resvg::render(&tree, transform, &mut pixmap.as_mut());
+
     let dir = runtime_icon_dir()?;
     let apps = dir.join("hicolor").join("32x32").join("apps");
     std::fs::create_dir_all(&apps).ok()?;
     let path = apps.join("xtools.png");
-    pb.savev(&path, "png", &[]).ok()?;
+    pixmap.save_png(&path).ok()?;
     Some(dir.to_string_lossy().into_owned())
 }
 

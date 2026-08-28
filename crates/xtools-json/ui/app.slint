@@ -134,7 +134,7 @@ export component JsonWindow inherits Window {
     callback expand-clicked();
     callback window-drag-started();
     callback window-dragged(length, length);
-    callback window-resize-started();
+    callback window-resize-started(int);
     callback window-resized(length, length);
     in property <bool> is-expanded: false;
     in-out property <string> text: "";
@@ -177,7 +177,7 @@ export component JsonWindow inherits Window {
             expand-clicked => { root.expand-clicked(); }
             window-drag-started => { root.window-drag-started(); }
             window-dragged(dx, dy) => { root.window-dragged(dx, dy); }
-            window-resize-started => { root.window-resize-started(); }
+            window-resize-started(edge) => { root.window-resize-started(edge); }
             window-resized(dx, dy) => { root.window-resized(dx, dy); }
             VerticalLayout {
                 spacing: 10px;
