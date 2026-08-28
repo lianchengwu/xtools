@@ -5,13 +5,13 @@
 </p>
 
 <p align="center">
-  <strong>专为 Linux 桌面打造的轻量级极简悬浮球工具箱</strong>
+  <strong>为 Linux 与 Windows 桌面打造的轻量级极简悬浮球工具箱</strong>
   <br />
   <em>纯 Rust + Slint / GTK4 构建 · 环绕轨道交互 · 多进程独立窗口 · 秒级极速响应</em>
 </p>
 
 <p align="center">
-  <a href="#-核心特性"><img src="https://img.shields.io/badge/Platform-Linux%20(Wayland%20%2F%20X11)-3E7BFA?logo=linux" alt="Linux Support" /></a>
+  <a href="#-核心特性"><img src="https://img.shields.io/badge/Platform-Linux%20%7C%20Windows-3E7BFA?logo=linux" alt="Platform Support" /></a>
   <a href="#-技术栈"><img src="https://img.shields.io/badge/Language-Rust%202024-F74C00?logo=rust" alt="Rust 2024" /></a>
   <a href="#-技术栈"><img src="https://img.shields.io/badge/GUI-Slint%20%2B%20GTK4-4B32C3" alt="GUI Stack" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT" /></a>
@@ -26,6 +26,7 @@
 - 🎯 **单例与极速聚焦**：各功能窗口通过平台原生 IPC（Linux Unix Domain Socket / Windows Named Pipe）实现单例机制；再次启动时毫秒级拉起并聚焦已有窗口。
 - 🎨 **统一度量与暗色主题**：通过 `xtools-ui` 统一 Slint 样式、色彩系统与无边框沉浸式窗口组件，各工具视觉风格高度一致。
 - 🐧 **现代 Linux 桌面原生支持**：支持 Wayland（`gtk4-layer-shell` 协议层）与 X11 混合环境，内置 SNI 规范系统托盘（System Tray）支持。
+- 🪟 **Windows 原生支持**：基于 Win32 分层窗口（`UpdateLayeredWindow` 逐像素透明）与 Named Pipe 单例 IPC，声明 Per-Monitor V2 DPI 感知，提供悬浮球与系统托盘，CI 自动产出便携 ZIP 与 Inno Setup 安装包。
 
 ---
 
@@ -43,10 +44,10 @@
 
 ```text
                +-----------------------------+
-               |         xtools-host         |  <--- GTK4 / Layer-Shell 悬浮主球 & 托盘
+               |         xtools-host         |  <--- GTK4 / Layer-Shell（Linux）· Win32 分层窗口（Windows）悬浮主球 & 托盘
                +--------------+--------------+
                               |
-                (Unix Socket / IPC Spawn)
+                (Unix Socket / Named Pipe / IPC Spawn)
                               |
         +---------------------+---------------------+
         |                     |                     |
@@ -60,7 +61,7 @@
              (主题样式 / 单例管理 / 窗口修饰)
 ```
 
-- **`crates/xtools-host`**：主球与环绕动画宿主，Cairo 自绘矢量图形，系统托盘图标管理。
+- **`crates/xtools-host`**：主球与环绕动画宿主，Linux 侧 Cairo 自绘矢量图形 / Windows 侧软件光栅化，系统托盘图标管理。
 - **`crates/xtools-time`**：基于 `jiff` 的高精度时间戳处理工具。
 - **`crates/xtools-json`**：基于 `serde_json` 的 JSON 格式化与校验工具。
 - **`crates/xtools-trans`**：基于 `ureq` 的轻量级翻译工具。
@@ -104,13 +105,13 @@ cargo check --workspace
 cargo build --release
 ```
 
-Windows Phase 1 支持单独构建三个 Slint 工具：
+Windows 支持构建全部组件（三个工具 + 悬浮球 host 与系统托盘），无需任何额外系统依赖：
 
 ```powershell
-cargo build -p xtools-time -p xtools-json -p xtools-trans --release
+cargo build --workspace --release
 ```
 
-Windows Phase 1 不包含 `xtools-host`，因此不提供主悬浮球、系统托盘或相关桌面集成功能。
+Windows 侧基于 Win32 分层窗口（`UpdateLayeredWindow` 逐像素透明）与 Named Pipe 单例 IPC 实现，声明 Per-Monitor V2 DPI 感知；Linux 专属的 GTK layer-shell / X11 / KWin 代码不会参与编译。
 
 编译产物位于 `target/release/`：
 - `xtools-host`（主悬浮球与托盘）
@@ -152,6 +153,8 @@ Windows Phase 1 不包含 `xtools-host`，因此不提供主悬浮球、系统�
 ```bash
 cargo generate-rpm -p crates/xtools-host
 ```
+
+Windows 侧由 CI（`release.yml`）自动构建便携 ZIP 与 Inno Setup 安装包（安装脚本见 `scripts/windows-installer.iss`），并在每次推送时运行 Windows 单例冒烟测试（`scripts/windows-singleton-smoke.ps1`）。
 
 ---
 
