@@ -58,7 +58,7 @@ try {
         if (-not $first.HasExited) {
             throw "Could not terminate first $tool process $($first.Id)."
         }
-        Start-Sleep -Milliseconds 300
+        Start-Sleep -Milliseconds 500
 
         $third = Start-Process -FilePath $path -WorkingDirectory $TargetDir -PassThru
         $started.Add($third)

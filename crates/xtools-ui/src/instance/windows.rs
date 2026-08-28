@@ -95,9 +95,11 @@ pub fn claim_instance(name: &str) -> io::Result<Option<InstanceListener>> {
         unsafe { CloseHandle(mutex) };
         return Ok(None);
     }
-    // If a previous instance just exited, NPFS may take a moment to finish tearing down the pipe.
-    // Retry briefly while holding the mutex before giving up.
-    for _ in 0..10 {
+    // We successfully claimed the unique instance mutex: we are the primary instance.
+    // If a previous instance just exited or was killed, NPFS may take a brief moment
+    // to finish releasing the dead pipe name. Retry while holding the mutex.
+    let mut last_err = None;
+    for _ in 0..50 {
         match create_pipe(&pipe_name) {
             Ok(handle) => {
                 return Ok(Some(InstanceListener(Arc::new(Mutex::new(Inner {
@@ -107,13 +109,14 @@ pub fn claim_instance(name: &str) -> io::Result<Option<InstanceListener>> {
                     pending: Vec::new(),
                 })))));
             }
-            Err(_) => {
-                std::thread::sleep(std::time::Duration::from_millis(20));
+            Err(err) => {
+                last_err = Some(err);
+                std::thread::sleep(std::time::Duration::from_millis(40));
             }
         }
     }
     unsafe { CloseHandle(mutex) };
-    Ok(None)
+    Err(last_err.unwrap_or_else(|| Error::new(ErrorKind::Other, "failed to create named pipe after acquiring instance mutex")))
 }
 
 fn connect(name: &[u16]) -> io::Result<Option<HANDLE>> {
