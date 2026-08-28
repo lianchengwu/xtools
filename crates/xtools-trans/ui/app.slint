@@ -1,5 +1,4 @@
-import { ToolShell, MultilineEditor, ActionButton, CopyButton, IconButton, DropdownSelector, InlineError, InlineNote, Theme } from "@xtools-ui/components.slint";
-
+import { ToolShell, MultilineEditor, ActionButton, CopyButton, IconButton, DropdownSelector, ValueInput, InlineError, InlineNote, Theme } from "@xtools-ui/components.slint";
 export component TransWindow inherits Window {
     title: "智能翻译";
     no-frame: true;
@@ -19,6 +18,11 @@ export component TransWindow inherits Window {
 
     in property <[string]> src-options: ["自动", "中文", "英语", "日语", "韩语", "法语", "德语", "西班牙语", "俄语"];
     in property <[string]> dst-options: ["中文", "英语", "日语", "韩语", "法语", "德语", "西班牙语", "俄语"];
+    in property <[string]> engine-options: ["MyMemory (免密钥)", "百度翻译"];
+    in-out property <int> engine-index: 0;
+    in-out property <bool> show-settings: false;
+    in-out property <string> baidu-appid: "";
+    in-out property <string> baidu-key: "";
 
     in property <bool> pending: false;
     in property <bool> can-translate: false;
@@ -33,7 +37,9 @@ export component TransWindow inherits Window {
     callback input-edited(string);
     callback src-changed(int);
     callback dst-changed(int);
-
+    callback engine-changed(int);
+    callback save-settings(string, string);
+    callback toggle-settings();
     forward-focus: focus-scope;
     focus-scope := FocusScope {
         key-pressed(event) => {
@@ -52,16 +58,97 @@ export component TransWindow inherits Window {
             window-dragged(dx, dy) => { root.window-dragged(dx, dy); }
 
             VerticalLayout {
-                spacing: 10px;
+                spacing: 8px;
                 alignment: stretch;
 
-                Text {
-                    text: "原文 (Source)";
-                    font-size: Theme.font-size-small;
-                    font-weight: 600;
-                    color: Theme.muted;
+                // Top Bar: Section Title + Engine Selector + Settings
+                HorizontalLayout {
+                    spacing: 8px;
+                    alignment: space-between;
+
+                    Text {
+                        text: "原文 (Source)";
+                        font-size: Theme.font-size-small;
+                        font-weight: 600;
+                        color: Theme.muted;
+                        vertical-alignment: center;
+                    }
+
+                    HorizontalLayout {
+                        spacing: 6px;
+                        alignment: end;
+
+                        Text {
+                            text: "引擎：";
+                            font-size: Theme.font-size-small;
+                            font-weight: 500;
+                            color: Theme.muted;
+                            vertical-alignment: center;
+                        }
+
+                        DropdownSelector {
+                            options: root.engine-options;
+                            selected-index <=> root.engine-index;
+                            selector-width: 140px;
+                            selection-changed(idx) => { root.engine-changed(idx); }
+                        }
+
+                        if root.engine-index == 1 : IconButton {
+                            icon: "⚙";
+                            clicked => { root.toggle-settings(); }
+                        }
+                    }
                 }
 
+                // Optional Baidu API Keys Settings Drawer
+                if root.show-settings : Rectangle {
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.primary;
+                    background: Theme.card-bg;
+
+                    VerticalLayout {
+                        padding: 10px;
+                        spacing: 8px;
+
+                        HorizontalLayout {
+                            alignment: space-between;
+                            Text {
+                                text: "🔑 百度翻译 API 密钥配置 (fanyi-api.baidu.com)";
+                                font-size: Theme.font-size-small;
+                                font-weight: 600;
+                                color: Theme.foreground;
+                                vertical-alignment: center;
+                            }
+                            IconButton {
+                                icon: "×";
+                                clicked => { root.toggle-settings(); }
+                            }
+                        }
+
+                        HorizontalLayout {
+                            spacing: 8px;
+                            alignment: stretch;
+                            ValueInput {
+                                placeholder: "输入 百度翻译 App ID";
+                                text <=> root.baidu-appid;
+                                horizontal-stretch: 1;
+                            }
+                            ValueInput {
+                                placeholder: "输入 密钥 (Secret Key)";
+                                text <=> root.baidu-key;
+                                horizontal-stretch: 1;
+                            }
+                            ActionButton {
+                                text: "保存";
+                                is-primary: true;
+                                clicked => {
+                                    root.save-settings(root.baidu-appid, root.baidu-key);
+                                }
+                            }
+                        }
+                    }
+                }
                 MultilineEditor {
                     text <=> root.input-text;
                     vertical-stretch: 1;

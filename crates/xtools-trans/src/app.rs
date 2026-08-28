@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::rc::Rc;
 use std::thread;
 use std::time::Duration;
 
@@ -6,8 +8,8 @@ use xtools_ui::slint_chrome::{WindowDragState, copy_to_clipboard, setup_raise_ti
 #[cfg(unix)]
 use xtools_ui::slint_chrome::{setup_auto_exit_on_focus_loss_timer, setup_skip_taskbar_timer};
 
-use crate::engine::{MyMemoryEngine, TranslateEngine};
-
+use crate::config::TranslateConfig;
+use crate::engine::{BaiduEngine, MyMemoryEngine, TranslateEngine};
 slint::include_modules!();
 
 const SOURCE: &[(&str, &str)] = &[
@@ -33,6 +35,13 @@ const TARGET: &[(&str, &str)] = &[
     ("ru", "俄语"),
 ];
 
+pub fn create_engine(engine_idx: i32, config: &TranslateConfig) -> Box<dyn TranslateEngine> {
+    match engine_idx {
+        1 => Box::new(BaiduEngine::new(&config.baidu_appid, &config.baidu_key)),
+        _ => Box::new(MyMemoryEngine),
+    }
+}
+
 pub struct TransApp {
     ui: TransWindow,
     _lock: xtools_ui::InstanceListener,
@@ -46,8 +55,13 @@ pub struct TransApp {
 impl TransApp {
     pub fn new(lock: xtools_ui::InstanceListener) -> Result<Self, slint::PlatformError> {
         let ui = TransWindow::new()?;
-        ui.set_status_text(format!("引擎：{}", MyMemoryEngine.name()).into());
-        ui.set_can_translate(false);
+        let cfg = Rc::new(RefCell::new(TranslateConfig::load()));
+        let initial_cfg = cfg.borrow().clone();
+        let engine = create_engine(initial_cfg.engine_index, &initial_cfg);
+        ui.set_engine_index(initial_cfg.engine_index);
+        ui.set_baidu_appid(initial_cfg.baidu_appid.into());
+        ui.set_baidu_key(initial_cfg.baidu_key.into());
+        ui.set_status_text(format!("引擎：{}", engine.name()).into());
         ui.set_can_copy(false);
 
         let drag_state = WindowDragState::new();
@@ -116,9 +130,56 @@ impl TransApp {
             });
         }
 
+        // Engine changed
+        {
+            let ui_weak = ui.as_weak();
+            let cfg = cfg.clone();
+            ui.on_engine_changed(move |idx| {
+                if let Some(ui) = ui_weak.upgrade() {
+                    let mut config = cfg.borrow_mut();
+                    config.engine_index = idx;
+                    let _ = config.save();
+
+                    let engine = create_engine(idx, &config);
+                    ui.set_status_text(format!("引擎：{}", engine.name()).into());
+                    if idx == 1 && (config.baidu_appid.trim().is_empty() || config.baidu_key.trim().is_empty()) {
+                        ui.set_show_settings(true);
+                    }
+                }
+            });
+        }
+
+        // Toggle settings
+        {
+            let ui_weak = ui.as_weak();
+            ui.on_toggle_settings(move || {
+                if let Some(ui) = ui_weak.upgrade() {
+                    let current = ui.get_show_settings();
+                    ui.set_show_settings(!current);
+                }
+            });
+        }
+
+        // Save settings
+        {
+            let ui_weak = ui.as_weak();
+            let cfg = cfg.clone();
+            ui.on_save_settings(move |appid, key| {
+                if let Some(ui) = ui_weak.upgrade() {
+                    let mut config = cfg.borrow_mut();
+                    config.baidu_appid = appid.trim().to_string();
+                    config.baidu_key = key.trim().to_string();
+                    let _ = config.save();
+                    ui.set_show_settings(false);
+                    ui.set_error_text("".into());
+                }
+            });
+        }
+
         // Translate clicked
         {
             let ui_weak = ui.as_weak();
+            let cfg = cfg.clone();
             ui.on_translate_clicked(move || {
                 if let Some(ui) = ui_weak.upgrade() {
                     if ui.get_pending() {
@@ -133,13 +194,25 @@ impl TransApp {
                     let dst_idx = (ui.get_dst_index() as usize).min(TARGET.len() - 1);
                     let src = SOURCE[src_idx].0.to_string();
                     let dst = TARGET[dst_idx].0.to_string();
+                    let engine_idx = ui.get_engine_index();
+
+                    let config = cfg.borrow().clone();
+
+                    if engine_idx == 1
+                        && (config.baidu_appid.trim().is_empty() || config.baidu_key.trim().is_empty())
+                    {
+                        ui.set_show_settings(true);
+                        ui.set_error_text("请先输入并保存百度翻译 AppID 和密钥。".into());
+                        return;
+                    }
+
+                    let engine = create_engine(engine_idx, &config);
 
                     ui.set_pending(true);
                     ui.set_error_text("".into());
 
                     let ui_handle = ui_weak.clone();
                     thread::spawn(move || {
-                        let engine = MyMemoryEngine;
                         let result = engine
                             .translate(&text, &src, &dst)
                             .map_err(|err| err.to_string());
@@ -244,5 +317,18 @@ mod tests {
         let (src, dst, _, _) = swap_state(0, 0, "".to_string(), "".to_string());
         assert_eq!(src, 1); // zh-CN
         assert_eq!(dst, 1); // en
+    }
+
+    #[test]
+    fn create_engine_picks_correct_variant() {
+        let cfg = TranslateConfig {
+            engine_index: 0,
+            baidu_appid: "appid_123".into(),
+            baidu_key: "key_abc".into(),
+        };
+        let e0 = create_engine(0, &cfg);
+        assert_eq!(e0.name(), "MyMemory");
+        let e1 = create_engine(1, &cfg);
+        assert_eq!(e1.name(), "百度翻译");
     }
 }

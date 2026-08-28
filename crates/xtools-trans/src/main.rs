@@ -1,4 +1,5 @@
 mod app;
+mod config;
 mod engine;
 
 use xtools_ui::{

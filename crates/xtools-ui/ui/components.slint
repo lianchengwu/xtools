@@ -149,6 +149,14 @@ export component ValueInput inherits Rectangle {
         padding-left: 10px;
         padding-right: 10px;
 
+        if root.text == "" && root.placeholder != "" && !input.has-focus : Text {
+            text: root.placeholder;
+            font-size: Theme.font-size-body;
+            font-family: Theme.font-mono;
+            color: Theme.muted;
+            vertical-alignment: center;
+        }
+
         input := TextInput {
             text <=> root.text;
             enabled: root.enabled;
