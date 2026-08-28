@@ -20,7 +20,6 @@ use windows_sys::Win32::System::WindowsProgramming::GetUserNameW;
 struct Inner {
     handle: HANDLE,
     mutex: HANDLE,
-    pipe_name: Vec<u16>,
     connected: bool,
     pending: Vec<u8>,
 }
@@ -104,7 +103,6 @@ pub fn claim_instance(name: &str) -> io::Result<Option<InstanceListener>> {
                 return Ok(Some(InstanceListener(Arc::new(Mutex::new(Inner {
                     handle,
                     mutex,
-                    pipe_name,
                     connected: false,
                     pending: Vec::new(),
                 })))));

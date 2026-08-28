@@ -1,45 +1,42 @@
 //! Windows native layered window management, message loop, input, and tool spawning.
 
-use std::cell::RefCell;
 use std::mem::zeroed;
 use std::path::PathBuf;
 use std::process::Command;
-use std::rc::Rc;
 use std::time::Instant;
 
 use windows_sys::Win32::Foundation::{
-    COLORREF, HWND, LPARAM, LRESULT, POINT, RECT as WIN_RECT, SIZE, WPARAM,
+    HWND, LPARAM, LRESULT, POINT, RECT as WIN_RECT, SIZE, WPARAM,
 };
 use windows_sys::Win32::Graphics::Gdi::{
     AC_SRC_ALPHA, AC_SRC_OVER, BI_RGB, BITMAPINFO, BITMAPINFOHEADER, BLENDFUNCTION,
     CreateCompatibleDC, CreateDIBSection, DIB_RGB_COLORS, DeleteDC, DeleteObject,
-    GetDC, HBITMAP, HDC, ReleaseDC, SelectObject, ULW_ALPHA, UpdateLayeredWindow,
+    GetDC, HBITMAP, HDC, ReleaseDC, SelectObject,
 };
 use windows_sys::Win32::System::LibraryLoader::GetModuleHandleW;
+use windows_sys::Win32::UI::Input::KeyboardAndMouse::{ReleaseCapture, SetCapture};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetCursorPos,
     GetMessageW, GetSystemMetrics, KillTimer, MSG, PostQuitMessage, RegisterClassExW,
-    ReleaseCapture, SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, SWP_NOACTIVATE,
-    SWP_NOSIZE, SWP_NOZORDER, SetCapture, SetTimer, SetWindowLongPtrW, SetWindowPos,
-    ShowWindow, SystemParametersInfoW, GWLP_USERDATA, HWND_TOPMOST, HTCLIENT,
-    HTTRANSPARENT, MSGFLT_ALLOW, ChangeWindowMessageFilter, SPI_GETWORKAREA,
-    WM_COMMAND, WM_DESTROY, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE,
-    WM_NCHITTEST, WM_RBUTTONUP, WM_TIMER, WNDCLASSEXW, WS_EX_LAYERED,
-    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    SM_CXSCREEN, SM_CYSCREEN, SW_HIDE, SW_SHOW, SWP_NOACTIVATE, SWP_NOSIZE,
+    SWP_NOZORDER, SetTimer, SetWindowLongPtrW, SetWindowPos, ShowWindow,
+    SystemParametersInfoW, GWLP_USERDATA, HWND_TOPMOST, HTCLIENT, HTTRANSPARENT,
+    SPI_GETWORKAREA, ULW_ALPHA, UpdateLayeredWindow, WM_COMMAND, WM_DESTROY,
+    WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCHITTEST, WM_RBUTTONUP,
+    WM_TIMER, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 
 use xtools_ui::{
     HOST_INSTANCE, SLOP, ToolId, claim_instance, func_radius, main_radius,
-    orbit_radius, raise_instance,
+    raise_instance,
 };
 
 use crate::anim;
-use crate::layout::{self, Rect, fan_seats, hit_disk};
+use crate::layout::{Rect, fan_seats, hit_disk};
 use crate::windows::paint::{Surface, draw_func, draw_main};
 use crate::windows::tray::{
     ID_TRAY_QUIT, ID_TRAY_SHOW_HIDE, TrayIcon, WM_TRAY_CALLBACK,
 };
-
 const TIMER_ANIM: usize = 1;
 const TIMER_IPC: usize = 2;
 
@@ -97,7 +94,7 @@ impl HostWindow {
     pub fn new(hwnd: HWND, listener: xtools_ui::InstanceListener) -> Self {
         let (screen_w, screen_h) = get_work_area_size();
 
-        let scale = if screen_w >= 2560 || screen_h >= 1600 {
+        let scale: f64 = if screen_w >= 2560 || screen_h >= 1600 {
             1.5
         } else {
             1.0
@@ -553,70 +550,72 @@ unsafe extern "system" fn window_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
-    let ptr = SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0) as *mut HostWindow;
-    SetWindowLongPtrW(hwnd, GWLP_USERDATA, ptr as isize);
+    unsafe {
+        let ptr = SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0) as *mut HostWindow;
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, ptr as isize);
 
-    if ptr.is_null() {
-        return DefWindowProcW(hwnd, msg, wparam, lparam);
-    }
-    let host = &mut *ptr;
+        if ptr.is_null() {
+            return DefWindowProcW(hwnd, msg, wparam, lparam);
+        }
+        let host = &mut *ptr;
 
-    match msg {
-        WM_NCHITTEST => {
-            let x = (lparam & 0xFFFF) as i16 as i32;
-            let y = ((lparam >> 16) & 0xFFFF) as i16 as i32;
-            host.hit_test(x, y)
-        }
-        WM_LBUTTONDOWN => {
-            let mut pt: POINT = zeroed();
-            GetCursorPos(&mut pt);
-            host.on_lbutton_down(pt.x, pt.y);
-            0
-        }
-        WM_MOUSEMOVE => {
-            let mut pt: POINT = zeroed();
-            GetCursorPos(&mut pt);
-            host.on_mouse_move(pt.x, pt.y);
-            0
-        }
-        WM_LBUTTONUP => {
-            let mut pt: POINT = zeroed();
-            GetCursorPos(&mut pt);
-            host.on_lbutton_up(pt.x, pt.y);
-            0
-        }
-        WM_RBUTTONUP => {
-            host.on_rbutton_up();
-            0
-        }
-        WM_TIMER => {
-            host.on_timer(wparam);
-            0
-        }
-        WM_COMMAND => {
-            let id = wparam & 0xFFFF;
-            if id == ID_TRAY_SHOW_HIDE {
-                host.toggle_visibility();
-            } else if id == ID_TRAY_QUIT {
-                DestroyWindow(hwnd);
-                PostQuitMessage(0);
+        match msg {
+            WM_NCHITTEST => {
+                let x = (lparam & 0xFFFF) as i16 as i32;
+                let y = ((lparam >> 16) & 0xFFFF) as i16 as i32;
+                host.hit_test(x, y)
             }
-            0
-        }
-        WM_TRAY_CALLBACK => {
-            let event = lparam as u32;
-            if event == WM_LBUTTONUP {
-                host.toggle_visibility();
-            } else if event == WM_RBUTTONUP {
+            WM_LBUTTONDOWN => {
+                let mut pt: POINT = zeroed();
+                GetCursorPos(&mut pt);
+                host.on_lbutton_down(pt.x, pt.y);
+                0
+            }
+            WM_MOUSEMOVE => {
+                let mut pt: POINT = zeroed();
+                GetCursorPos(&mut pt);
+                host.on_mouse_move(pt.x, pt.y);
+                0
+            }
+            WM_LBUTTONUP => {
+                let mut pt: POINT = zeroed();
+                GetCursorPos(&mut pt);
+                host.on_lbutton_up(pt.x, pt.y);
+                0
+            }
+            WM_RBUTTONUP => {
                 host.on_rbutton_up();
+                0
             }
-            0
+            WM_TIMER => {
+                host.on_timer(wparam);
+                0
+            }
+            WM_COMMAND => {
+                let id = wparam & 0xFFFF;
+                if id == ID_TRAY_SHOW_HIDE {
+                    host.toggle_visibility();
+                } else if id == ID_TRAY_QUIT {
+                    DestroyWindow(hwnd);
+                    PostQuitMessage(0);
+                }
+                0
+            }
+            WM_TRAY_CALLBACK => {
+                let event = lparam as u32;
+                if event == WM_LBUTTONUP {
+                    host.toggle_visibility();
+                } else if event == WM_RBUTTONUP {
+                    host.on_rbutton_up();
+                }
+                0
+            }
+            WM_DESTROY => {
+                PostQuitMessage(0);
+                0
+            }
+            _ => DefWindowProcW(hwnd, msg, wparam, lparam),
         }
-        WM_DESTROY => {
-            PostQuitMessage(0);
-            0
-        }
-        _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     }
 }
 

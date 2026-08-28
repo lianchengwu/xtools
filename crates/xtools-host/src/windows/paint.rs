@@ -1,6 +1,6 @@
 //! Windows 32-bit ARGB software rendering for the floating ball and orbital menu.
 
-use xtools_ui::{Color, MARK_PX, ORB_FILL, ORB_MARK, ToolId, func_radius, main_radius};
+use xtools_ui::{Color, ORB_FILL, ORB_MARK, ToolId, func_radius, main_radius};
 
 /// 32-bit ARGB (premultiplied alpha) pixel surface.
 pub struct Surface {
